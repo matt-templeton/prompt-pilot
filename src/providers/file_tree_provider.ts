@@ -5,6 +5,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { debounce } from '../utils';
+import * as fs from 'fs';
 
 export class FileTreeItem extends vscode.TreeItem {
     constructor(
@@ -32,10 +33,16 @@ export class FileTreeItem extends vscode.TreeItem {
     }
 }
 
+// Add this interface
+interface SelectedPath {
+  path: string;
+  isDirectory: boolean;
+}
+
 export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
     private static instance: FileTreeProvider;
     private _onDidChangeTreeData = new vscode.EventEmitter<FileTreeItem | undefined | null | void>();
-    private _onDidChangeSelection = new vscode.EventEmitter<string[]>();
+    private _onDidChangeSelection = new vscode.EventEmitter<SelectedPath[]>();
     
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     readonly onDidChangeSelection = this._onDidChangeSelection.event;
@@ -66,6 +73,8 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
     toggleSelection(item: FileTreeItem): void {
         console.log('FileTreeProvider: toggleSelection called', item.resourceUri.fsPath);
         const path = item.resourceUri.fsPath;
+        const isDirectory = fs.statSync(path).isDirectory();
+
         if (this.selectedFiles.has(path)) {
             this.selectedFiles.delete(path);
             item.updateCheckboxState(false);
@@ -73,9 +82,8 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
             this.selectedFiles.add(path);
             item.updateCheckboxState(true);
         }
-        console.log('FileTreeProvider: Selected files after toggle:', Array.from(this.selectedFiles));
-        this._onDidChangeTreeData.fire();
-        this._onDidChangeSelection.fire(Array.from(this.selectedFiles));
+
+        this._onDidChangeSelection.fire(this.getSelectedFiles());
     }
 
     refresh(): void {
@@ -294,9 +302,12 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
         }
     }
 
-    // Add method to get selected files
-    getSelectedFiles(): string[] {
-        return Array.from(this.selectedFiles);
+    // Modify getSelectedFiles to include directory information
+    getSelectedFiles(): SelectedPath[] {
+        return Array.from(this.selectedFiles).map(path => ({
+            path,
+            isDirectory: fs.statSync(path).isDirectory()
+        }));
     }
 
     dispose() {

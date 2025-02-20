@@ -7,6 +7,11 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { FileTreeProvider, FileTreeItem } from '../providers/file_tree_provider';
 
+interface SelectedPath {
+	path: string;
+	isDirectory: boolean;
+}
+
 suite('Extension Test Suite', () => {
 	vscode.window.showInformationMessage('Start all tests.');
 
@@ -23,12 +28,12 @@ suite('File Explorer Tests', () => {
 		// Use getInstance instead of new constructor
 		provider = FileTreeProvider.getInstance();
 		
-		// Clear any existing state
-		provider.getSelectedFiles().forEach(file => {
+		// Update to handle SelectedPath type
+		provider.getSelectedFiles().forEach((selectedPath: SelectedPath) => {
 			provider.toggleSelection(new FileTreeItem(
-				path.basename(file),
+				path.basename(selectedPath.path),
 				vscode.TreeItemCollapsibleState.None,
-				vscode.Uri.file(file),
+				vscode.Uri.file(selectedPath.path),
 				true
 			));
 		});
@@ -88,24 +93,20 @@ suite('File Explorer Tests', () => {
 			return;
 		}
 
-		// Get root files
 		const rootFiles = await provider.getChildren();
 		assert.ok(rootFiles.length > 0, 'Should have some files in workspace');
 
-		// Toggle first file
 		const firstFile = rootFiles[0];
 		provider.toggleSelection(firstFile);
 
-		// Check if file is selected
 		const selectedFiles = provider.getSelectedFiles();
 		assert.strictEqual(selectedFiles.length, 1, 'Should have one selected file');
 		assert.strictEqual(
-			selectedFiles[0],
+			selectedFiles[0].path,  // Update to access path property
 			firstFile.resourceUri.fsPath,
 			'Selected file should match toggled file'
 		);
 
-		// Toggle again to unselect
 		provider.toggleSelection(firstFile);
 		assert.strictEqual(
 			provider.getSelectedFiles().length,

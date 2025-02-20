@@ -5,8 +5,12 @@ import Directory from './Directory';
 // Get vscode API
 const vscodeApi = acquireVsCodeApi();
 
-interface DirectoryMap {
-  [fullPath: string]: string[];
+type DirectoryMap = Record<string, string[]>;
+
+// Add the interface
+interface SelectedPath {
+  path: string;
+  isDirectory: boolean;
 }
 
 const FileExplorerBox = () => {
@@ -31,19 +35,23 @@ const FileExplorerBox = () => {
     return () => window.removeEventListener('message', messageHandler);
   }, []);
 
-  const handleSelectedFilesUpdate = (files: string[]) => {
-    // Create new directory map
+  const handleSelectedFilesUpdate = (selectedPaths: SelectedPath[]) => {
     const newDirectoryMap: DirectoryMap = {};
+    console.log("SELECTED FILES UPDATE");
+    console.log(selectedPaths);
+
+    // Filter out directories and only process files
+    const files = selectedPaths.filter(item => !item.isDirectory);
     
-    files.forEach(file => {
-      const pathParts = file.split(/[/\\]/);
+    files.forEach(({path}) => {
+      const pathParts = path.split(/[/\\]/);
       pathParts.pop(); // Remove filename
       const dirPath = pathParts.join('/') || '.';
       
       if (!newDirectoryMap[dirPath]) {
         newDirectoryMap[dirPath] = [];
       }
-      newDirectoryMap[dirPath].push(file);
+      newDirectoryMap[dirPath].push(path);
     });
 
     setDirectoryMap(newDirectoryMap);
@@ -70,8 +78,8 @@ const FileExplorerBox = () => {
 
   // Sort directories so root comes first, then alphabetically by full path
   const sortedDirectories = Object.keys(directoryMap).sort((a, b) => {
-    if (a === '.') return -1;
-    if (b === '.') return 1;
+    if (a === '.') {return -1;}
+    if (b === '.') {return 1;}
     return a.localeCompare(b);
   });
 
