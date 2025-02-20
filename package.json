@@ -32,6 +32,11 @@
 				"command": "promptRepo.refresh",
 				"title": "Refresh",
 				"icon": "$(refresh)"
+			},
+			{
+				"command": "promptPilot.openPromptPanel",
+				"title": "Open Prompt Panel",
+				"category": "Prompt Pilot"
 			}
 		],
 		"views": {

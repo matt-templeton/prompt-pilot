@@ -2,6 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { createFileExplorerView } from './views/file_explorer_view';
+import { PromptPanelProvider } from './providers/prompt_panel_provider';
 
 
 // this method is called when your extension is activated
@@ -52,6 +53,21 @@ export function activate(context: vscode.ExtensionContext) {
 		fileExplorer.fileTreeProvider.refresh(); // Refresh view
 	});
 
-	context.subscriptions.push(fileExplorer, disposable, toggleCommand, searchCommand, refreshCommand);
+	// Create and register the prompt panel provider
+	const promptPanelProvider = new PromptPanelProvider(context);
+	
+	// Register the command to open the prompt panel
+	const openPromptPanelCommand = vscode.commands.registerCommand('promptPilot.openPromptPanel', () => {
+		promptPanelProvider.showPanel();
+	});
+
+	context.subscriptions.push(
+		fileExplorer, 
+		disposable, 
+		toggleCommand, 
+		searchCommand, 
+		refreshCommand,
+		openPromptPanelCommand
+	);
 
 }

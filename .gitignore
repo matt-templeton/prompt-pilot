@@ -3,3 +3,16 @@ node_modules
 .vscode-test/
 *.vsix
 /.cursor
+/src/views/prompt-panel/node_modules
+/src/views/prompt-panel/public
+
+# React app specific
+src/views/prompt-panel/build
+src/views/prompt-panel/.env
+src/views/prompt-panel/.env.local
+src/views/prompt-panel/.env.development.local
+src/views/prompt-panel/.env.test.local
+src/views/prompt-panel/.env.production.local
+src/views/prompt-panel/npm-debug.log*
+src/views/prompt-panel/yarn-debug.log*
+src/views/prompt-panel/yarn-error.log*
