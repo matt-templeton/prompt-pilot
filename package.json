@@ -1,7 +1,7 @@
 {
 	"name": "prompt-pilot",
 	"displayName": "Prompt Pilot",
-	"description": "Prompt Pilot extension for VS Code",
+	"description": "**Repo Prompt for VSCode/Cursor** is a powerful extension designed to enhance AI-assisted development workflows by integrating advanced file and context management tools directly into the editor. It enables developers to efficiently select files and folders for AI context, extract token-efficient API surfaces, save and reuse prompts, and navigate codebases with ease. Built specifically for **VSCode/Cursor users**, this extension bridges the gap between AI tools and codebases, making it ideal for developers working on large or complex projects. #### **Key Features**: 1. **File and Folder Selection**: Recursively select files and folders, apply filters, and preview token counts to provide precise context for AI prompts. 2. **Code Map and API Extraction**: Extract and display API surfaces (classes, functions, variables) for token-efficient AI interactions. 3. **Saved Prompts and Mappings**: Save and organize custom prompts, associate them with specific projects, and reuse them seamlessly. 4. **File Tree and Navigation**: Visualize project structures, highlight AI context files, and navigate dependencies with ease. #### **Target Users**: - **Developers**: Streamline AI-assisted coding, refactoring, and debugging workflows. - **Teams**: Standardize prompts and mappings across projects for consistent AI outputs. - **Open-Source Contributors**: Quickly understand and contribute to large codebases using AI-powered insights. #### **Use Cases**: - **Refactoring**: Select specific files, extract their API surfaces, and use AI to suggest optimizations. - **Documentation**: Generate documentation for selected files or folders using saved prompts. - **Onboarding**: Use the Code Map to understand a new codebase and its dependencies. - **Collaboration**: Share saved prompts and repository mappings with team members for consistent AI interactions. **Repo Prompt for VSCode/Cursor** is the ultimate tool for developers looking to integrate AI into their workflows without leaving their editor.",
 	"version": "0.0.1",
 	"publisher": "vscode-samples",
 	"repository": "https://github.com/matt-templeton/prompt-pilot.git",
@@ -16,24 +16,46 @@
 	"contributes": {
 		"commands": [
 			{
+				"command": "promptPilot.toggleSelection",
+				"title": "Toggle File Selection"
+			},
+			{
 				"command": "extension.helloWorld",
 				"title": "Hello World"
 			}
-		]
+		],
+		"views": {
+		  "explorer": [
+			{
+			  "id": "promptPilotExplorer",
+			  "name": "Prompt Repo"
+			}
+		  ]
+		}
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
 		"compile": "tsc -p ./",
 		"lint": "eslint",
-		"watch": "tsc -watch -p ./"
+		"watch": "tsc -watch -p ./",
+		"test": "vscode-test"
 	},
 	"devDependencies": {
+		"@types/glob": "^7.1.3",
 		"@eslint/js": "^9.13.0",
+		"@types/vscode-webview": "^1.57.0",
+		"@vscode/test-cli": "^0.0.4",
+		"@vscode/test-electron": "^2.3.9",
 		"@stylistic/eslint-plugin": "^2.9.0",
 		"@types/node": "^20",
 		"@types/vscode": "^1.73.0",
+		"glob": "^10.3.10",
 		"eslint": "^9.13.0",
 		"typescript": "^5.7.2",
-		"typescript-eslint": "^8.16.0"
+		"typescript-eslint": "^8.16.0",
+		"mocha": "^10.2.0",
+		"@types/mocha": "^10.0.6",
+		"vscode-test": "^1.5.2",
+		"lru-cache": "^7.18.3"
 	}
 }
