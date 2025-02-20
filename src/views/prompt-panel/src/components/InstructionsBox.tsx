@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Paper, Chip, IconButton, Menu, MenuItem, TextField } from '@mui/material';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
+import { Box, Paper, Chip, Menu, MenuItem, TextField, Typography, Button } from '@mui/material';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 
 const DUMMY_PROMPTS = ['Template 1', 'Template 2', 'Custom Prompt'];
 
@@ -21,31 +21,52 @@ const InstructionsBox = () => {
     handleMenuClose();
   };
 
+  const handlePromptDelete = (indexToDelete: number) => {
+    const newPrompts = selectedPrompts.filter((_, index) => index !== indexToDelete);
+    setSelectedPrompts(newPrompts);
+  };
+
   return (
     <Paper sx={{ p: 2 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          {selectedPrompts.map((prompt, index) => (
-            <Chip 
-              key={index} 
-              label={prompt} 
-              onDelete={() => {
-                const newPrompts = selectedPrompts.filter((_, i) => i !== index);
-                setSelectedPrompts(newPrompts);
-              }}
-            />
-          ))}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        mb: 2 
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h6">Instructions</Typography>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {selectedPrompts.map((prompt, index) => (
+              <Chip 
+                key={index} 
+                label={prompt} 
+                onDelete={() => handlePromptDelete(index)}
+                size="small"
+              />
+            ))}
+          </Box>
         </Box>
-        <IconButton onClick={handleMenuClick}>
-          <MoreVertIcon />
-        </IconButton>
+        
+        <Button
+          onClick={handleMenuClick}
+          endIcon={<KeyboardArrowDownIcon />}
+          variant="outlined"
+          size="small"
+        >
+          Prompts
+        </Button>
+
         <Menu
           anchorEl={anchorEl}
           open={Boolean(anchorEl)}
           onClose={handleMenuClose}
         >
           {DUMMY_PROMPTS.map((prompt) => (
-            <MenuItem key={prompt} onClick={() => handlePromptSelect(prompt)}>
+            <MenuItem 
+              key={prompt} 
+              onClick={() => handlePromptSelect(prompt)}
+            >
               {prompt}
             </MenuItem>
           ))}
