@@ -33,26 +33,38 @@ export class FileTreeItem extends vscode.TreeItem {
 }
 
 export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
+    private static instance: FileTreeProvider;
     private _onDidChangeTreeData = new vscode.EventEmitter<FileTreeItem | undefined | null | void>();
+    private _onDidChangeSelection = new vscode.EventEmitter<string[]>();
+    
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+    readonly onDidChangeSelection = this._onDidChangeSelection.event;
+
     private fileWatcher: vscode.FileSystemWatcher;
     private selectedFiles = new Set<string>();
     private searchQuery = '';
     private currentSearchResults: [string, vscode.FileType][] = [];
     private isSearching = false;
 
-    constructor() {
-        // Create a file system watcher
+    private constructor() {
+        console.log("FileTreeProvider: constructor!");
+        // Make constructor private for singleton
         this.fileWatcher = vscode.workspace.createFileSystemWatcher('**/*');
-        
-        // Watch for file changes
         this.fileWatcher.onDidCreate(() => this.refresh());
         this.fileWatcher.onDidDelete(() => this.refresh());
         this.fileWatcher.onDidChange(() => this.refresh());
     }
 
+    public static getInstance(): FileTreeProvider {
+        if (!FileTreeProvider.instance) {
+            FileTreeProvider.instance = new FileTreeProvider();
+        }
+        return FileTreeProvider.instance;
+    }
+
     // Update toggle selection method
     toggleSelection(item: FileTreeItem): void {
+        console.log('FileTreeProvider: toggleSelection called', item.resourceUri.fsPath);
         const path = item.resourceUri.fsPath;
         if (this.selectedFiles.has(path)) {
             this.selectedFiles.delete(path);
@@ -61,7 +73,9 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
             this.selectedFiles.add(path);
             item.updateCheckboxState(true);
         }
+        console.log('FileTreeProvider: Selected files after toggle:', Array.from(this.selectedFiles));
         this._onDidChangeTreeData.fire();
+        this._onDidChangeSelection.fire(Array.from(this.selectedFiles));
     }
 
     refresh(): void {
@@ -69,6 +83,7 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
     }
 
     getTreeItem(element: FileTreeItem): vscode.TreeItem {
+        console.log("FileTreeProvider: getTreeItem: ", element);
         return element;
     }
 

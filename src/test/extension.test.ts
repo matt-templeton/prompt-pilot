@@ -20,7 +20,18 @@ suite('File Explorer Tests', () => {
 	let provider: FileTreeProvider;
 
 	setup(() => {
-		provider = new FileTreeProvider();
+		// Use getInstance instead of new constructor
+		provider = FileTreeProvider.getInstance();
+		
+		// Clear any existing state
+		provider.getSelectedFiles().forEach(file => {
+			provider.toggleSelection(new FileTreeItem(
+				path.basename(file),
+				vscode.TreeItemCollapsibleState.None,
+				vscode.Uri.file(file),
+				true
+			));
+		});
 	});
 
 	test('FileTreeProvider initialization', () => {
@@ -167,5 +178,12 @@ suite('File Explorer Tests', () => {
 				console.error('Error cleaning up test file:', e);
 			}
 		}
+	});
+
+	// Add new test for singleton behavior
+	test('Singleton pattern', () => {
+		const instance1 = FileTreeProvider.getInstance();
+		const instance2 = FileTreeProvider.getInstance();
+		assert.strictEqual(instance1, instance2, 'Should return the same instance');
 	});
 });

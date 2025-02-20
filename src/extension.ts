@@ -3,6 +3,7 @@
 import * as vscode from 'vscode';
 import { createFileExplorerView } from './views/file_explorer_view';
 import { PromptPanelProvider } from './providers/prompt_panel_provider';
+import { FileTreeProvider } from './providers/file_tree_provider';
 
 
 // this method is called when your extension is activated
@@ -12,12 +13,28 @@ export function activate(context: vscode.ExtensionContext) {
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "helloworld-sample" is now active!');
 
+	// Get singleton instance of FileTreeProvider
+	const fileTreeProvider = FileTreeProvider.getInstance();
+	
 	// Create and register the file explorer view
-    const fileExplorer = createFileExplorerView();
-    
-    // Register the toggle command
-    const toggleCommand = vscode.commands.registerCommand('promptRepo.toggleSelection', 
-        (item) => fileExplorer.fileTreeProvider.toggleSelection(item));
+	const fileExplorer = createFileExplorerView(fileTreeProvider);
+	
+	// Create and register the prompt panel provider with injected dependencies
+	const promptPanelProvider = new PromptPanelProvider(context, fileTreeProvider);
+	
+	// Subscribe to selection changes
+	fileTreeProvider.onDidChangeSelection(files => {
+		console.log('Extension: Selection changed:', files);
+	});
+	
+	// Register commands
+	const openPromptPanelCommand = vscode.commands.registerCommand('promptPilot.openPromptPanel', () => {
+		promptPanelProvider.showPanel();
+	});
+
+	// Register the toggle command
+	const toggleCommand = vscode.commands.registerCommand('promptRepo.toggleSelection', 
+		(item) => fileExplorer.fileTreeProvider.toggleSelection(item));
 
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
@@ -51,14 +68,6 @@ export function activate(context: vscode.ExtensionContext) {
 	const refreshCommand = vscode.commands.registerCommand('promptRepo.refresh', () => {
 		fileExplorer.fileTreeProvider.setSearchQuery(''); // Clear search
 		fileExplorer.fileTreeProvider.refresh(); // Refresh view
-	});
-
-	// Create and register the prompt panel provider
-	const promptPanelProvider = new PromptPanelProvider(context);
-	
-	// Register the command to open the prompt panel
-	const openPromptPanelCommand = vscode.commands.registerCommand('promptPilot.openPromptPanel', () => {
-		promptPanelProvider.showPanel();
 	});
 
 	context.subscriptions.push(

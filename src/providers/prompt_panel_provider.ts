@@ -1,14 +1,15 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { FileTreeProvider } from './file_tree_provider';
 
 export class PromptPanelProvider {
     public static readonly viewType = 'promptPilot.promptPanel';
     private panel: vscode.WebviewPanel | undefined;
-    private context: vscode.ExtensionContext;
 
-    constructor(context: vscode.ExtensionContext) {
-        this.context = context;
-    }
+    constructor(
+        private readonly context: vscode.ExtensionContext,
+        private readonly fileTreeProvider: FileTreeProvider
+    ) {}
 
     public showPanel() {
         const columnToShowIn = vscode.window.activeTextEditor
@@ -34,6 +35,41 @@ export class PromptPanelProvider {
 
         // Set HTML content
         this.panel.webview.html = this._getWebviewContent();
+
+        // Set up message handling when panel is created
+        this.panel.webview.onDidReceiveMessage(
+            message => {
+                console.log('PromptPanelProvider: HELLO Received message from webview:', message);
+                switch (message.type) {
+                    case 'getSelectedFiles': {
+                        const files = this.fileTreeProvider.getSelectedFiles();
+                        console.log('PromptPanelProvider: Sending selected files to webview:', files);
+                        this.panel?.webview.postMessage({
+                            type: 'selectedFiles',
+                            files: files
+                        });
+                        break;
+                    }
+                    case 'toggleFileSelection': {
+                        vscode.commands.executeCommand('promptRepo.toggleSelection', {
+                            resourceUri: vscode.Uri.file(message.file)
+                        });
+                        break;
+                    }
+                }
+            },
+            undefined,
+            this.context.subscriptions
+        );
+
+        // Add listener for selection changes
+        this.fileTreeProvider.onDidChangeSelection(files => {
+            console.log('PromptPanelProvider: Selection changed, sending to webview:', files);
+            this.panel?.webview.postMessage({
+                type: 'selectedFiles',
+                files: files
+            });
+        });
 
         this.panel.onDidDispose(
             () => {

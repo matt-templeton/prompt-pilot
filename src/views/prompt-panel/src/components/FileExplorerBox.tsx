@@ -1,26 +1,127 @@
-import React from 'react';
-import { Box, Paper, Typography, Chip } from '@mui/material';
+import React, { useEffect, useState } from 'react';
+import { Box, Paper, Typography, Chip, Collapse } from '@mui/material';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 
-const DUMMY_FILES = [
-  'src/index.ts',
-  'src/components/App.tsx',
-  'src/utils/helpers.ts',
-];
+// Get vscode API
+const vscodeApi = acquireVsCodeApi();
+
+interface FileGroup {
+  directory: string;
+  files: string[];
+}
 
 const FileExplorerBox = () => {
+  const [fileGroups, setFileGroups] = useState<FileGroup[]>([]);
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    console.log('FileExplorerBox: Setting up message listener');
+    
+    const messageHandler = (event: MessageEvent) => {
+        console.log('FileExplorerBox: Received message:', event.data);
+        const message = event.data;
+        if (message.type === 'selectedFiles') {
+            console.log('FileExplorerBox: Updating file groups with:', message.files);
+            const groups = groupFilesByDirectory(message.files);
+            setFileGroups(groups);
+        }
+    };
+
+    window.addEventListener('message', messageHandler);
+
+    // Use vscodeApi instead of vscode
+    console.log('FileExplorerBox: Requesting initial selected files');
+    vscodeApi.postMessage({ type: 'getSelectedFiles' });
+
+    return () => window.removeEventListener('message', messageHandler);
+  }, []);
+
+  const groupFilesByDirectory = (files: string[]): FileGroup[] => {
+    const groups = new Map<string, string[]>();
+    
+    files.forEach(file => {
+      const directory = file.split('/').slice(0, -1).join('/') || '.';
+      if (!groups.has(directory)) {
+        groups.set(directory, []);
+      }
+      groups.get(directory)!.push(file);
+    });
+
+    return Array.from(groups.entries()).map(([directory, files]) => ({
+      directory,
+      files
+    }));
+  };
+
+  const toggleDirectory = (directory: string) => {
+    console.log("toggleDirectory called!");
+    setExpandedDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(directory)) {
+        next.delete(directory);
+      } else {
+        next.add(directory);
+      }
+      return next;
+    });
+  };
+
+  const handleFileDelete = (fileToDelete: string) => {
+    // Use vscodeApi here too
+    vscodeApi.postMessage({
+      type: 'toggleFileSelection',
+      file: fileToDelete
+    });
+  };
+
   return (
     <Paper sx={{ p: 2 }}>
       <Typography variant="h6" sx={{ mb: 2 }}>
         Selected Files
       </Typography>
       
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-        {DUMMY_FILES.map((file) => (
-          <Chip 
-            key={file} 
-            label={file} 
-            onDelete={() => {}}
-          />
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {fileGroups.map(({ directory, files }) => (
+          <Box key={directory}>
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                cursor: 'pointer',
+                gap: 1,
+                mb: 1
+              }}
+              onClick={() => toggleDirectory(directory)}
+            >
+              {expandedDirs.has(directory) 
+                ? <KeyboardArrowDownIcon fontSize="small" />
+                : <KeyboardArrowRightIcon fontSize="small" />
+              }
+              <Typography variant="subtitle2">
+                {directory}
+              </Typography>
+            </Box>
+            
+            <Collapse in={expandedDirs.has(directory)}>
+              <Box sx={{ 
+                display: 'flex', 
+                gap: 1, 
+                flexWrap: 'wrap',
+                ml: 4,
+                mb: 1
+              }}>
+                {files.map((file) => (
+                  <Chip 
+                    key={file} 
+                    label={file.split('/').pop()} 
+                    onDelete={() => handleFileDelete(file)}
+                    size="small"
+                  />
+                ))}
+              </Box>
+            </Collapse>
+          </Box>
         ))}
       </Box>
     </Paper>

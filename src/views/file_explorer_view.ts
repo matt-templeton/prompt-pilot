@@ -4,12 +4,22 @@
 import * as vscode from 'vscode';
 import { FileTreeProvider } from '../providers/file_tree_provider';
 
-export function createFileExplorerView() {
-    const fileTreeProvider = new FileTreeProvider();
+export function createFileExplorerView(fileTreeProvider: FileTreeProvider) {
     const treeView = vscode.window.createTreeView('promptPilotExplorer', {
         treeDataProvider: fileTreeProvider,
         showCollapseAll: true,
         canSelectMany: true,
+    });
+
+    // Add checkbox state change listener
+    treeView.onDidChangeCheckboxState(event => {
+        console.log('TreeView: Checkbox state changed', event.items);
+        event.items.forEach(([item, state]) => {
+            const checked = state === vscode.TreeItemCheckboxState.Checked;
+            console.log('TreeView: Setting item', item.label, 'to', checked);
+            // Update the item's checkbox state through our provider
+            fileTreeProvider.toggleSelection(item);
+        });
     });
 
     return {
@@ -17,7 +27,6 @@ export function createFileExplorerView() {
         fileTreeProvider,
         dispose: () => {
             treeView.dispose();
-            // fileTreeProvider.dispose();
         }
     };
 }
