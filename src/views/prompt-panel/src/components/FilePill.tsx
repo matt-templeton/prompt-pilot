@@ -4,6 +4,7 @@ import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 
 interface FilePillProps {
   filename: string;
+  directory: string;
   tokenCount: number;
   onDelete: () => void;
 }
@@ -16,7 +17,7 @@ const FilePill: React.FC<FilePillProps> = ({ filename, tokenCount, onDelete }) =
           sx={{ 
             fontSize: 16,
             ml: 1
-          }} 
+          }}
         />
       }
       label={
