@@ -1,5 +1,22 @@
 .App {
-  text-align: center;
+  height: 100vh;
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}
+
+/* Override MUI styles to match VSCode theme */
+.MuiPaper-root {
+  background-color: var(--vscode-editor-background) !important;
+  color: var(--vscode-editor-foreground) !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+}
+
+.MuiTab-root {
+  color: var(--vscode-editor-foreground) !important;
+}
+
+.MuiTab-root.Mui-selected {
+  color: var(--vscode-button-background) !important;
 }
 
 .App-logo {
