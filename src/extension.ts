@@ -46,6 +46,12 @@ export function activate(context: vscode.ExtensionContext) {
 		quickPick.show();
 	});
 
-	context.subscriptions.push(fileExplorer, disposable, toggleCommand, searchCommand);
+	// Register the refresh command
+	const refreshCommand = vscode.commands.registerCommand('promptRepo.refresh', () => {
+		fileExplorer.fileTreeProvider.setSearchQuery(''); // Clear search
+		fileExplorer.fileTreeProvider.refresh(); // Refresh view
+	});
+
+	context.subscriptions.push(fileExplorer, disposable, toggleCommand, searchCommand, refreshCommand);
 
 }

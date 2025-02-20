@@ -27,6 +27,11 @@
 				"command": "promptRepo.searchFiles",
 				"title": "Search Files",
 				"icon": "$(search)"
+			},
+			{
+				"command": "promptRepo.refresh",
+				"title": "Refresh",
+				"icon": "$(refresh)"
 			}
 		],
 		"views": {
@@ -40,9 +45,14 @@
 		"menus": {
 			"view/title": [
 				{
+					"command": "promptRepo.refresh",
+					"when": "view == promptPilotExplorer",
+					"group": "navigation@1"
+				},
+				{
 					"command": "promptRepo.searchFiles",
 					"when": "view == promptPilotExplorer",
-					"group": "navigation"
+					"group": "navigation@2"
 				}
 			]
 		}
