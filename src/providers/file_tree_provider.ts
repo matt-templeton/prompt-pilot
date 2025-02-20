@@ -4,6 +4,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { debounce } from '../utils';
 
 export class FileTreeItem extends vscode.TreeItem {
     constructor(
@@ -37,6 +38,8 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
     private fileWatcher: vscode.FileSystemWatcher;
     private selectedFiles = new Set<string>();
     private searchQuery = '';
+    private currentSearchResults: [string, vscode.FileType][] = [];
+    private isSearching = false;
 
     constructor() {
         // Create a file system watcher
@@ -101,10 +104,79 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
         return results;
     }
 
+    // Add this method to yield results as they're found
+    private async *findFilesGenerator(folderUri: vscode.Uri, searchQuery: string): AsyncGenerator<[string, vscode.FileType]> {
+        try {
+            const files = await vscode.workspace.fs.readDirectory(folderUri);
+            
+            // First yield files in current directory (breadth-first)
+            for (const [name, type] of files) {
+                if (name.toLowerCase().includes(searchQuery.toLowerCase())) {
+                    yield [name, type];
+                }
+            }
+
+            // Then recursively search subdirectories
+            for (const [name, type] of files) {
+                if (type === vscode.FileType.Directory) {
+                    const subFolderUri = vscode.Uri.joinPath(folderUri, name);
+                    for await (const [subName, subType] of this.findFilesGenerator(subFolderUri, searchQuery)) {
+                        const relativePath = path.join(name, subName);
+                        yield [relativePath, subType];
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error reading directory:', error);
+        }
+    }
+
+    // Add method to handle incremental search updates
+    private async performIncrementalSearch(searchQuery: string) {
+        if (!vscode.workspace.workspaceFolders) {
+            return;
+        }
+
+        this.isSearching = true;
+        this.currentSearchResults = [];
+        const rootPath = vscode.workspace.workspaceFolders[0].uri;
+
+        // Start the generator
+        const generator = this.findFilesGenerator(rootPath, searchQuery);
+        
+        // Process results in chunks and update the view
+        const updateView = debounce(() => {
+            this._onDidChangeTreeData.fire();
+        }, 100); // Debounce updates to prevent too frequent refreshes
+
+        for await (const result of generator) {
+            if (this.searchQuery !== searchQuery) {
+                // Search query changed while we were searching
+                break;
+            }
+            this.currentSearchResults.push(result);
+            updateView();
+        }
+
+        this.isSearching = false;
+        this._onDidChangeTreeData.fire(); // Final update
+    }
+
+    // Update the setSearchQuery method
+    setSearchQuery(query: string) {
+        this.searchQuery = query;
+        if (query) {
+            this.performIncrementalSearch(query);
+        } else {
+            this.currentSearchResults = [];
+            this.refresh();
+        }
+    }
+
+    // Update getChildren to use currentSearchResults
     async getChildren(element?: FileTreeItem): Promise<FileTreeItem[]> {
         try {
             if (!element) {
-                // Root of the workspace
                 const workspaceFolders = vscode.workspace.workspaceFolders;
                 if (!workspaceFolders) {
                     return Promise.resolve([]);
@@ -112,15 +184,10 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
                 const rootPath = workspaceFolders[0].uri;
 
                 if (this.searchQuery) {
-                    // If searching, get all files recursively
-                    const allFiles = await this.getAllFilesRecursively(rootPath);
-                    const filteredFiles = allFiles.filter(([name]) => 
-                        name.toLowerCase().includes(this.searchQuery.toLowerCase())
-                    );
-
-                    return filteredFiles.map(([name, type]) => {
+                    // Return current search results
+                    return this.currentSearchResults.map(([name, type]) => {
                         const resourceUri = vscode.Uri.joinPath(rootPath, name);
-                        const label = path.basename(name); // Show only the filename
+                        const label = path.basename(name);
                         const collapsibleState = type === vscode.FileType.Directory 
                             ? vscode.TreeItemCollapsibleState.Collapsed 
                             : vscode.TreeItemCollapsibleState.None;
@@ -132,7 +199,6 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
                             this.selectedFiles.has(resourceUri.fsPath)
                         );
 
-                        // Add description to show path
                         const relativePath = path.dirname(name);
                         if (relativePath !== '.') {
                             item.description = relativePath;
@@ -147,11 +213,9 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
                         return item;
                     });
                 } else {
-                    // If not searching, show normal directory view
                     return this.getFilesInFolder(rootPath);
                 }
             } else {
-                // Get children of the folder normally
                 return this.getFilesInFolder(element.resourceUri);
             }
         } catch (error) {
@@ -218,12 +282,6 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
     // Add method to get selected files
     getSelectedFiles(): string[] {
         return Array.from(this.selectedFiles);
-    }
-
-    // Add this method to handle search
-    setSearchQuery(query: string) {
-        this.searchQuery = query;
-        this.refresh();
     }
 
     dispose() {
