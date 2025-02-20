@@ -22,6 +22,11 @@
 			{
 				"command": "extension.helloWorld",
 				"title": "Hello World"
+			},
+			{
+				"command": "promptRepo.searchFiles",
+				"title": "Search Files",
+				"icon": "$(search)"
 			}
 		],
 		"views": {
@@ -31,6 +36,15 @@
 			  "name": "Prompt Repo"
 			}
 		  ]
+		},
+		"menus": {
+			"view/title": [
+				{
+					"command": "promptRepo.searchFiles",
+					"when": "view == promptPilotExplorer",
+					"group": "navigation"
+				}
+			]
 		}
 	},
 	"scripts": {

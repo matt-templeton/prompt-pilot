@@ -36,6 +36,7 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private fileWatcher: vscode.FileSystemWatcher;
     private selectedFiles = new Set<string>();
+    private searchQuery = '';
 
     constructor() {
         // Create a file system watcher
@@ -105,7 +106,13 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
                 return nameA.toLowerCase().localeCompare(nameB.toLowerCase());
             });
             
-            return sortedFiles.map(([name, type]) => {
+            // Filter files based on search query
+            const filteredFiles = this.searchQuery 
+                ? sortedFiles.filter(([name]) => 
+                    name.toLowerCase().includes(this.searchQuery.toLowerCase()))
+                : sortedFiles;
+            
+            return filteredFiles.map(([name, type]) => {
                 const resourceUri = vscode.Uri.joinPath(folderUri, name);
                 const collapsibleState = type === vscode.FileType.Directory 
                     ? vscode.TreeItemCollapsibleState.Collapsed 
@@ -136,6 +143,12 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
     // Add method to get selected files
     getSelectedFiles(): string[] {
         return Array.from(this.selectedFiles);
+    }
+
+    // Add this method to handle search
+    setSearchQuery(query: string) {
+        this.searchQuery = query;
+        this.refresh();
     }
 
     dispose() {

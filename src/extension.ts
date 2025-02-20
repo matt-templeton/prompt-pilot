@@ -28,6 +28,24 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.showInformationMessage('Hello World!');
 	});
 
-	context.subscriptions.push(fileExplorer, disposable, toggleCommand);
+	// Register the search command
+	const searchCommand = vscode.commands.registerCommand('promptRepo.searchFiles', async () => {
+		const quickPick = vscode.window.createQuickPick();
+		quickPick.placeholder = 'Search files...';
+		
+		// Update search results as user types
+		quickPick.onDidChangeValue(value => {
+			fileExplorer.fileTreeProvider.setSearchQuery(value);
+		});
+
+		// Clean up when quick pick is closed
+		quickPick.onDidHide(() => {
+			quickPick.dispose();
+		});
+
+		quickPick.show();
+	});
+
+	context.subscriptions.push(fileExplorer, disposable, toggleCommand, searchCommand);
 
 }
