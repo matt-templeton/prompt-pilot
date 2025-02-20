@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Paper, Typography, Chip, Collapse } from '@mui/material';
+import { Box, Paper, Typography, Collapse } from '@mui/material';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
+import FilePill from './FilePill';
 
 // Get vscode API
 const vscodeApi = acquireVsCodeApi();
@@ -99,26 +100,32 @@ const FileExplorerBox = () => {
                 : <KeyboardArrowRightIcon fontSize="small" />
               }
               <Typography variant="subtitle2">
-                {directory}
+                {directory === '.' ? 'Root' : directory}
               </Typography>
             </Box>
             
             <Collapse in={expandedDirs.has(directory)}>
               <Box sx={{ 
                 display: 'flex', 
-                gap: 1, 
+                gap: 2,
                 flexWrap: 'wrap',
                 ml: 4,
-                mb: 1
+                mb: 1,
+                width: 'calc(100% - 32px)'
               }}>
-                {files.map((file) => (
-                  <Chip 
-                    key={file} 
-                    label={file.split('/').pop()} 
-                    onDelete={() => handleFileDelete(file)}
-                    size="small"
-                  />
-                ))}
+                {files.map((file) => {
+                  const dummyTokenCount = +(Math.random() * 1.9 + 0.1).toFixed(1);
+                  const filename = file.split(/[/\\]/).pop() || '';
+                  
+                  return (
+                    <FilePill
+                      key={file}
+                      filename={filename}
+                      tokenCount={dummyTokenCount}
+                      onDelete={() => handleFileDelete(file)}
+                    />
+                  );
+                })}
               </Box>
             </Collapse>
           </Box>
