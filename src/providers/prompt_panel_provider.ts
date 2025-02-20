@@ -23,7 +23,7 @@ export class PromptPanelProvider {
         this.panel = vscode.window.createWebviewPanel(
             PromptPanelProvider.viewType,
             'Prompt Pilot',
-            columnToShowIn || vscode.ViewColumn.One,
+            vscode.ViewColumn.Beside,
             {
                 enableScripts: true,
                 localResourceRoots: [

@@ -11,7 +11,7 @@ function App() {
     });
 
     // Notify extension that webview is ready
-    vscode.postMessage({ type: 'webviewReady' });
+    // vscode.postMessage({ type: 'webviewReady' });
   }, []);
 
   return (
