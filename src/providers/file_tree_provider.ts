@@ -17,18 +17,18 @@ export class FileTreeItem extends vscode.TreeItem {
         this.resourceUri = resourceUri;
         this.contextValue = 'file';
         
-        // Set the checkbox state property correctly
-        this.checkboxState = {
-            state: isChecked ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked
-        };
+        // Update this line to use the enum value directly
+        this.checkboxState = isChecked 
+            ? vscode.TreeItemCheckboxState.Checked 
+            : vscode.TreeItemCheckboxState.Unchecked;
     }
 
-    // Method to update checkbox state
+    // Update this method to use the enum value directly
     updateCheckboxState(checked: boolean) {
         this.isChecked = checked;
-        this.checkboxState = {
-            state: checked ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked
-        };
+        this.checkboxState = checked 
+            ? vscode.TreeItemCheckboxState.Checked 
+            : vscode.TreeItemCheckboxState.Unchecked;
     }
 }
 
