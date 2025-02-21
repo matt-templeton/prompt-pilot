@@ -49,7 +49,7 @@ const FilePill: React.FC<FilePillProps> = ({ filename, tokenCount, onDelete }) =
               mt: 0.5
             }}
           >
-            {tokenCount !== null ? `~${tokenCount} tokens` : ''}
+            {tokenCount !== null ? `${tokenCount} tokens` : ''}
           </Typography>
         </Box>
       }

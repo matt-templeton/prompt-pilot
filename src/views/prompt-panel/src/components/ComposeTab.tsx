@@ -34,8 +34,10 @@ const ComposeTab = () => {
       const message = event.data;
       if (message.type === 'models') {
         setModelsByProvider(message.models);
-        // Set first available model as default
-        if (message.models.anthropic.length > 0) {
+        // Use the selected model from the message or fall back to default
+        if (message.selectedModel) {
+          setSelectedModel(message.selectedModel);
+        } else if (message.models.anthropic.length > 0) {
           setSelectedModel(message.models.anthropic[0].id);
         } else if (message.models.openai.length > 0) {
           setSelectedModel(message.models.openai[0].id);

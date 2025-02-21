@@ -28,9 +28,17 @@ interface WebviewMessage {
     files?: {path: string; isDirectory: boolean}[];
 }
 
+interface WebviewPanelState {
+    selectedModel: string;
+}
+
+interface VSCodeWebviewPanel extends vscode.WebviewPanel {
+    state: WebviewPanelState;
+}
+
 export class PromptPanelProvider {
     public static readonly viewType = 'promptPilot.promptPanel';
-    private panel: vscode.WebviewPanel | undefined;
+    private panel: VSCodeWebviewPanel | undefined;
     private settingsManager: SettingsManager;
     private selectedModel = '';
 
@@ -64,7 +72,7 @@ export class PromptPanelProvider {
                     vscode.Uri.file(path.join(this.context.extensionPath, 'src', 'views', 'prompt-panel', 'build'))
                 ]
             }
-        );
+        ) as VSCodeWebviewPanel;
 
         // Fix the HTML content setting
         const html = this._getWebviewContent();
@@ -128,9 +136,14 @@ export class PromptPanelProvider {
                                 modelsByProvider.anthropic = await this.fetchAnthropicModels(settings.anthropicApiKey);
                             }
 
+                            // Restore selected model from state or set default
+                            const savedState = this.panel?.state;
+                            const selectedModel = savedState?.selectedModel || this.getDefaultModel(modelsByProvider);
+
                             this.panel?.webview.postMessage({
                                 type: 'models',
-                                models: modelsByProvider
+                                models: modelsByProvider,
+                                selectedModel // Send the selected model back to the webview
                             });
                             break;
                         }
@@ -163,9 +176,17 @@ export class PromptPanelProvider {
                             }
                             break;
                         }
-                        case 'modelSelected':
+                        case 'modelSelected': {
                             this.selectedModel = message.modelId || '';
+                            // Save state when model is selected
+                            if (this.panel) {
+                                this.panel.state = {
+                                    ...this.panel.state,
+                                    selectedModel: this.selectedModel
+                                };
+                            }
                             break;
+                        }
                     }
                 } catch (error) {
                     console.error('Error handling message:', error);
@@ -193,6 +214,30 @@ export class PromptPanelProvider {
                 files: filesWithTokens
             });
         });
+
+        // Add panel focus listener
+        this.panel.onDidChangeViewState(async e => {
+            console.log("onDidChangeViewState!!!", e);
+            if (e.webviewPanel.active) {
+                console.log("CHECKPOINT!");
+                // When panel becomes active, send current selection state with tokens
+                const selectedFiles = this.fileTreeProvider.getSelectedFiles();
+                console.log(selectedFiles);
+                const filesWithTokens = await Promise.all(
+                    selectedFiles.map(async file => ({
+                        ...file,
+                        tokenCount: file.isDirectory ? null :
+                            await this.handleFileContent(file.path, this.selectedModel)
+                    }))
+                );
+                console.log("Posting....");
+                console.log(filesWithTokens);
+                this.postMessageToWebview({
+                    type: 'selectedFiles',
+                    files: filesWithTokens
+                });
+            }
+        }, null, this.context.subscriptions);
 
         this.panel.onDidDispose(
             () => {
@@ -308,5 +353,15 @@ export class PromptPanelProvider {
 
     public postMessageToWebview(message: WebviewMessage) {
         this.panel?.webview.postMessage(message);
+    }
+
+    private getDefaultModel(modelsByProvider: ModelsByProvider): string {
+        if (modelsByProvider.anthropic.length > 0) {
+            return modelsByProvider.anthropic[0].id;
+        }
+        if (modelsByProvider.openai.length > 0) {
+            return modelsByProvider.openai[0].id;
+        }
+        return '';
     }
 } 
