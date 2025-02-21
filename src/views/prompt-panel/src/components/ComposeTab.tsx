@@ -26,7 +26,6 @@ const ComposeTab: React.FC = () => {
   
   useEffect(() => {
     console.log("ComposeTab: Setting up message listener");
-    console.log("Sending message...");
     // Request models from extension
     vscode.postMessage({ type: 'getModels' });
 
@@ -37,8 +36,6 @@ const ComposeTab: React.FC = () => {
       if (message.type === 'models') {
         setModelsByProvider(message.models);
         setSelectedModel(message.selectedModel);
-        // Need to forward this to FileExplorerBox
-        window.postMessage(message, '*');
       }
     };
 

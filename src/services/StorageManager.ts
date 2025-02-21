@@ -52,6 +52,7 @@ export class StorageManager {
             }
         } catch (error) {
             // If manifest doesn't exist, create a new one
+            console.error('No manifest found, creating new one:', error);
             await this.saveManifest();
         }
     }
