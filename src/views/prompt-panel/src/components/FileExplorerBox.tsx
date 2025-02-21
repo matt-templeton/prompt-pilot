@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, memo } from 'react';
 import { Box, Paper, Typography } from '@mui/material';
 import Directory from './Directory';
 import { useVSCode } from '../contexts/VSCodeContext';
@@ -125,4 +125,9 @@ const FileExplorerBox: React.FC = () => {
   );
 };
 
-export default FileExplorerBox; 
+// Export memoized version
+export default memo(FileExplorerBox, (prevProps, nextProps) => {
+  // Since we currently have no props, return true to only update on state changes
+  console.log(prevProps, nextProps);
+  return true;
+}); 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Box, Typography, Collapse } from '@mui/material';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
@@ -9,7 +9,7 @@ interface DirectoryProps {
   files: string[];
   isExpanded: boolean;
   onToggleExpand: () => void;
-  onFileDelete: (file: string) => void;
+  onFileDelete: (path: string) => void;
   tokenCounts: Map<string, number | null>;
 }
 
@@ -57,15 +57,14 @@ const Directory: React.FC<DirectoryProps> = ({
           width: 'calc(100% - 32px)'
         }}>
           {files.map((file) => {
-            const filename = file.split(/[/\\]/).pop() || '';
+            // const filename = file.split(/[/\\]/).pop() || '';
             const tokenCount = tokenCounts.get(file) ?? null;
             return (
               <FilePill
                 key={file}
-                filename={filename}
-                directory={fullPath}
+                path={file}
                 tokenCount={tokenCount}
-                onDelete={() => onFileDelete(file)}
+                onDelete={onFileDelete}
               />
             );
           })}
@@ -75,4 +74,26 @@ const Directory: React.FC<DirectoryProps> = ({
   );
 };
 
-export default Directory; 
+// Export memoized version with custom comparison
+export default memo(Directory, (prevProps, nextProps) => {
+  return (
+    prevProps.fullPath === nextProps.fullPath &&
+    prevProps.isExpanded === nextProps.isExpanded &&
+    prevProps.onToggleExpand === nextProps.onToggleExpand &&
+    prevProps.onFileDelete === nextProps.onFileDelete &&
+    prevProps.files.length === nextProps.files.length &&
+    prevProps.files.every((file, i) => file === nextProps.files[i]) &&
+    areMapsEqual(prevProps.tokenCounts, nextProps.tokenCounts)
+  );
+});
+
+// Helper function to compare Maps
+function areMapsEqual(map1: Map<string, number | null>, map2: Map<string, number | null>): boolean {
+  if (map1.size !== map2.size) {
+    return false;
+  }
+  
+  return Array.from(map1.entries()).every(([key, value]) => 
+    map2.get(key) === value
+  );
+} 

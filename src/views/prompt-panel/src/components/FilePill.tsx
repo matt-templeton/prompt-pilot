@@ -1,15 +1,14 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Chip, Box, Typography } from '@mui/material';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 
 interface FilePillProps {
-  filename: string;
-  directory: string;
+  path: string;
+  onDelete: (path: string) => void;
   tokenCount: number | null;
-  onDelete: () => void;
 }
 
-const FilePill: React.FC<FilePillProps> = ({ filename, tokenCount, onDelete }) => {
+const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
   console.log("IN FilePill!!!1");
   console.log(tokenCount);
   return (
@@ -39,7 +38,7 @@ const FilePill: React.FC<FilePillProps> = ({ filename, tokenCount, onDelete }) =
               whiteSpace: 'nowrap'
             }}
           >
-            {filename}
+            {path}
           </Typography>
           <Typography 
             variant="caption" 
@@ -53,7 +52,7 @@ const FilePill: React.FC<FilePillProps> = ({ filename, tokenCount, onDelete }) =
           </Typography>
         </Box>
       }
-      onDelete={onDelete}
+      onDelete={() => onDelete(path)}
       sx={{
         height: 'auto',
         width: 'calc(50% - 8px)',
@@ -71,4 +70,11 @@ const FilePill: React.FC<FilePillProps> = ({ filename, tokenCount, onDelete }) =
   );
 };
 
-export default FilePill; 
+// Export memoized version with custom comparison
+export default memo(FilePill, (prevProps, nextProps) => {
+  return (
+    prevProps.path === nextProps.path &&
+    prevProps.tokenCount === nextProps.tokenCount &&
+    prevProps.onDelete === nextProps.onDelete
+  );
+}); 
