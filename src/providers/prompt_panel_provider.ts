@@ -2,16 +2,12 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { FileTreeProvider } from './file_tree_provider';
 import { SettingsManager } from '../services/SettingsManager';
+import OpenAI from 'openai';
 
 interface OpenAIModel {
   id: string;
   created: number;
   owned_by: string;
-}
-
-interface OpenAIModelsResponse {
-  data: OpenAIModel[];
-  object: string;
 }
 
 interface WebviewMessage {
@@ -173,21 +169,13 @@ export class PromptPanelProvider {
 
     private async fetchOpenAIModels(apiKey: string): Promise<OpenAIModel[]> {
         try {
-            console.log("fetchOpenAIModels", apiKey);
-            const response = await fetch('https://api.openai.com/v1/models', {
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json'
-                }
+            const client = new OpenAI({
+                apiKey: apiKey
             });
-            console.log(response);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+
+            const list = await client.models.list();
             
-            const data = await response.json() as OpenAIModelsResponse;
-            console.log(data);
-            return data.data;
+            return list.data;
         } catch (error) {
             console.error('Error fetching OpenAI models:', error);
             return [];
