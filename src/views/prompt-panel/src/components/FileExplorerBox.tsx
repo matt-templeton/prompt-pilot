@@ -16,6 +16,7 @@ const FileExplorerBox: React.FC = () => {
   const [directoryMap, setDirectoryMap] = useState<DirectoryMap>({});
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [fileTokens, setFileTokens] = useState<Map<string, number | null>>(new Map());
+  const [initialized, setInitialized] = useState(false);
 
   const handleSelectedFilesUpdate = (files: SelectedPath[]) => {
     const newDirectoryMap: DirectoryMap = {};
@@ -52,16 +53,27 @@ const FileExplorerBox: React.FC = () => {
   useEffect(() => {
     const messageHandler = (event: MessageEvent) => {
       const message = event.data;
+      console.log("=== FILEEXPLORERBOX MESSAGE ===", message);
       if (message.type === 'selectedFiles') {
+        console.log("Handling selectedFiles message:", message.files);
         handleSelectedFilesUpdate(message.files);
+        setInitialized(true);
       }
     };
 
     window.addEventListener('message', messageHandler);
-    vscodeApi.postMessage({ type: 'getSelectedFiles' });
+    console.log("=== FILEEXPLORERBOX MOUNTED ===");
+    
+    // Only request files if we haven't received any yet
+    if (!initialized && Object.keys(directoryMap).length === 0) {
+      vscodeApi.postMessage({ type: 'getSelectedFiles' });
+    }
 
-    return () => window.removeEventListener('message', messageHandler);
-  }, [vscodeApi]);
+    return () => {
+      console.log("=== FILEEXPLORERBOX UNMOUNTED ===");
+      window.removeEventListener('message', messageHandler);
+    };
+  }, [vscodeApi, initialized, directoryMap]);
 
   const handleFileDelete = (fileToDelete: string) => {
     vscodeApi.postMessage({

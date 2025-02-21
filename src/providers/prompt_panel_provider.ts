@@ -30,6 +30,7 @@ interface WebviewMessage {
 
 interface WebviewPanelState {
     selectedModel: string;
+    selectedFiles: { path: string; isDirectory: boolean; tokenCount: number | null }[];
 }
 
 interface VSCodeWebviewPanel extends vscode.WebviewPanel {
@@ -101,10 +102,13 @@ export class PromptPanelProvider {
                             break;
                         }
                         case 'getSelectedFiles': {
-                            // Send current selection to webview
+                            console.log("=== GET SELECTED FILES MESSAGE RECEIVED ===");
+                            console.log("Current panel state:", this.panel?.state);
+                            const files = this.fileTreeProvider.getSelectedFiles();
+                            console.log("Files returned from getSelectedFiles:", files);
                             this.panel?.webview.postMessage({
                                 type: 'selectedFiles',
-                                files: message.files || []
+                                files: files
                             });
                             break;
                         }
@@ -199,7 +203,8 @@ export class PromptPanelProvider {
 
         // Add listener for selection changes
         this.fileTreeProvider.onDidChangeSelection(async files => {
-            console.log('PromptPanelProvider: Selection changed, tokenizing files...');
+            console.log("=== SELECTION CHANGED ===");
+            console.log("Raw files:", files);
             
             const filesWithTokens = await Promise.all(
                 files.map(async file => ({
@@ -208,8 +213,18 @@ export class PromptPanelProvider {
                         await this.handleFileContent(file.path, this.selectedModel)
                 }))
             );
+            console.log("Files with tokens:", filesWithTokens);
 
-            this.panel?.webview.postMessage({
+            if (this.panel) {
+                console.log("Saving to panel state");
+                this.panel.state = {
+                    ...this.panel.state,
+                    selectedFiles: filesWithTokens
+                };
+                console.log("New panel state:", this.panel.state);
+            }
+
+            this.postMessageToWebview({
                 type: 'selectedFiles',
                 files: filesWithTokens
             });
@@ -217,12 +232,17 @@ export class PromptPanelProvider {
 
         // Add panel focus listener
         this.panel.onDidChangeViewState(async e => {
-            console.log("onDidChangeViewState!!!", e);
+            console.log("=== VIEW STATE CHANGE ===");
+            console.log("Active:", e.webviewPanel.active);
             if (e.webviewPanel.active) {
-                console.log("CHECKPOINT!");
-                // When panel becomes active, send current selection state with tokens
-                const selectedFiles = this.fileTreeProvider.getSelectedFiles();
-                console.log(selectedFiles);
+                const savedState = this.panel?.state;
+                console.log("Saved state:", savedState);
+                
+                // Add debug for getSelectedFiles call
+                console.log("About to call getSelectedFiles from view state change");
+                const selectedFiles = savedState?.selectedFiles || this.fileTreeProvider.getSelectedFiles();
+                console.log("Selected files after potential getSelectedFiles call:", selectedFiles);
+                
                 const filesWithTokens = await Promise.all(
                     selectedFiles.map(async file => ({
                         ...file,
@@ -230,8 +250,8 @@ export class PromptPanelProvider {
                             await this.handleFileContent(file.path, this.selectedModel)
                     }))
                 );
-                console.log("Posting....");
-                console.log(filesWithTokens);
+                console.log("Files with tokens to send:", filesWithTokens);
+
                 this.postMessageToWebview({
                     type: 'selectedFiles',
                     files: filesWithTokens
