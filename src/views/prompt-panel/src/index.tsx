@@ -7,6 +7,8 @@ import App from './App';
 // console.log("Acquiring api....");
 // const vscodeApi = acquireVsCodeApi();
 // console.log("did it, ", vscodeApi);
+console.log("React app: Starting initialization");
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
@@ -16,3 +18,5 @@ root.render(
     <App />
   </React.StrictMode>
 );
+
+console.log("React app: Completed render");

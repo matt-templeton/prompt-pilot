@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Tab, Tabs, ThemeProvider, createTheme } from '@mui/material';
 import './App.css';
 import ComposeTab from './components/ComposeTab';
@@ -65,7 +65,12 @@ function TabPanel(props: TabPanelProps) {
 }
 
 function App() {
+  console.log("App: Component mounting");
   const [tabValue, setTabValue] = useState(0);
+
+  useEffect(() => {
+    console.log("App: Initial mount effect");
+  }, []);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);

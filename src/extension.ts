@@ -6,6 +6,8 @@ import { PromptPanelProvider } from './providers/prompt_panel_provider';
 import { FileTreeProvider, FileTreeItem } from './providers/file_tree_provider';
 import * as path from 'path';
 import * as fs from 'fs';
+import { OpenAI } from 'openai';
+import type { Anthropic as AnthropicType } from '@anthropic-ai/sdk';
 
 interface OpenAIModel {
 	id: string;
@@ -13,12 +15,22 @@ interface OpenAIModel {
 	owned_by: string;
 }
 
+// interface AnthropicModel {
+// 	id: string;
+// 	created: number;
+// 	display_name: string;
+// }
+
+interface ModelsByProvider {
+	openai: OpenAIModel[];
+	anthropic: AnthropicType.ModelInfo[];
+}
+
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "helloworld-sample" is now active!');
 
 	// Get singleton instance of FileTreeProvider
 	const fileTreeProvider = FileTreeProvider.getInstance();
@@ -29,39 +41,40 @@ export function activate(context: vscode.ExtensionContext) {
 	// Create and register the prompt panel provider with injected dependencies
 	const promptPanelProvider = new PromptPanelProvider(context, fileTreeProvider);
 	
+	
 	// Add this function to fetch OpenAI models
-	async function fetchOpenAIModels(apiKey: string): Promise<OpenAIModel[]> {
+	async function fetchAllModels(apiKey: string): Promise<ModelsByProvider> {
+		const modelsByProvider: ModelsByProvider = {
+			openai: [],
+			anthropic: []
+		};
+		
 		try {
-			const response = await fetch('https://api.openai.com/v1/models', {
-				headers: {
-					'Authorization': `Bearer ${apiKey}`,
-					'Content-Type': 'application/json'
-				}
+			const client = new OpenAI({
+				apiKey: apiKey
 			});
-			
-			if (!response.ok) {
-				throw new Error(`HTTP error! status: ${response.status}`);
-			}
-			
-			const data = await response.json();
-			return data.data;
+			modelsByProvider.openai = (await client.models.list()).data;
 		} catch (error) {
 			console.error('Error fetching OpenAI models:', error);
-			return [];
 		}
+
+		return modelsByProvider;
 	}
 
-	// Add this to handle model fetching
+	// Update the configuration change handler
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeConfiguration(async (e) => {
 			if (e.affectsConfiguration('promptPilot.openaiApiKey')) {
 				const config = vscode.workspace.getConfiguration('promptPilot');
 				const apiKey = config.get<string>('openaiApiKey') || '';
+				const anthropicApiKey = config.get<string>('anthropicApiKey') || '';
+				console.log(anthropicApiKey, apiKey);
 				if (apiKey) {
-					const models = await fetchOpenAIModels(apiKey);
+					console.log("Fetching all models...");
+					const modelsByProvider = await fetchAllModels(apiKey);
 					promptPanelProvider.postMessageToWebview({
 						type: 'models',
-						models: models
+						models: modelsByProvider
 					});
 				}
 			}

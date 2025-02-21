@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Button, Typography, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
+import { Box, Button, Typography, Select, MenuItem, FormControl, InputLabel, ListSubheader } from '@mui/material';
 import InstructionsBox from './InstructionsBox';
 import FileExplorerBox from './FileExplorerBox';
 import { useVSCode } from '../contexts/VSCodeContext';
+// import { Anthropic } from '@anthropic-ai/sdk';
+import type { Anthropic as AnthropicType } from '@anthropic-ai/sdk';
 
 interface OpenAIModel {
   id: string;
@@ -10,12 +12,19 @@ interface OpenAIModel {
   owned_by: string;
 }
 
+interface ModelsByProvider {
+  openai: OpenAIModel[];
+  anthropic: AnthropicType.ModelInfo[];
+}
+
 const ComposeTab = () => {
+  console.log("ComposeTab: Component mounting");
   const vscode = useVSCode();
-  const [models, setModels] = useState<OpenAIModel[]>([]);
+  const [modelsByProvider, setModelsByProvider] = useState<ModelsByProvider>({ openai: [], anthropic: [] });
   const [selectedModel, setSelectedModel] = useState<string>('');
   
   useEffect(() => {
+    console.log("ComposeTab: Setting up message listener");
     console.log("Sending message...");
     // Request models from extension
     vscode.postMessage({ type: 'getModels' });
@@ -24,9 +33,12 @@ const ComposeTab = () => {
       console.log("handleMessage:, ", event);
       const message = event.data;
       if (message.type === 'models') {
-        setModels(message.models);
-        if (message.models.length > 0) {
-          setSelectedModel(message.models[0].id);
+        setModelsByProvider(message.models);
+        // Set first available model as default
+        if (message.models.anthropic.length > 0) {
+          setSelectedModel(message.models.anthropic[0].id);
+        } else if (message.models.openai.length > 0) {
+          setSelectedModel(message.models.openai[0].id);
         }
       }
     };
@@ -59,7 +71,19 @@ const ComposeTab = () => {
               onChange={(e) => setSelectedModel(e.target.value)}
               size="small"
             >
-              {models.map((model) => (
+              {modelsByProvider.anthropic.length > 0 && (
+                <ListSubheader>Anthropic</ListSubheader>
+              )}
+              {modelsByProvider.anthropic.map((model) => (
+                <MenuItem key={model.id} value={model.id}>
+                  {model.display_name || model.id}
+                </MenuItem>
+              ))}
+              
+              {modelsByProvider.openai.length > 0 && (
+                <ListSubheader>OpenAI</ListSubheader>
+              )}
+              {modelsByProvider.openai.map((model) => (
                 <MenuItem key={model.id} value={model.id}>
                   {model.id}
                 </MenuItem>

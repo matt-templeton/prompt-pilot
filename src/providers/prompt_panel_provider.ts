@@ -3,6 +3,8 @@ import * as path from 'path';
 import { FileTreeProvider } from './file_tree_provider';
 import { SettingsManager } from '../services/SettingsManager';
 import OpenAI from 'openai';
+import { Anthropic } from '@anthropic-ai/sdk';
+import type { Anthropic as AnthropicType } from '@anthropic-ai/sdk';
 
 interface OpenAIModel {
   id: string;
@@ -10,9 +12,14 @@ interface OpenAIModel {
   owned_by: string;
 }
 
+interface ModelsByProvider {
+  openai: OpenAIModel[];
+  anthropic: AnthropicType.ModelInfo[];
+}
+
 interface WebviewMessage {
     type: string;
-    models?: OpenAIModel[];
+    models?: ModelsByProvider;
     settings?: {
         openaiApiKey?: string;
         anthropicApiKey?: string;
@@ -33,15 +40,18 @@ export class PromptPanelProvider {
     }
 
     public showPanel() {
+        console.log("PromptPanelProvider: showPanel called");
         const columnToShowIn = vscode.window.activeTextEditor
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
 
         if (this.panel) {
+            console.log("PromptPanelProvider: Reusing existing panel");
             this.panel.reveal(columnToShowIn);
             return;
         }
 
+        console.log("PromptPanelProvider: Creating new panel");
         this.panel = vscode.window.createWebviewPanel(
             PromptPanelProvider.viewType,
             'Prompt Pilot',
@@ -54,13 +64,15 @@ export class PromptPanelProvider {
             }
         );
 
-        // Set HTML content
-        this.panel.webview.html = this._getWebviewContent();
+        // Fix the HTML content setting
+        const html = this._getWebviewContent();
+        console.log("PromptPanelProvider: Setting HTML content");
+        this.panel.webview.html = html;
 
         // Set up message handling when panel is created
         this.panel.webview.onDidReceiveMessage(
             async message => {
-                console.log('PromptPanelProvider: Received message from webview:', message);
+                console.log('PromptPanelProvider: Received message:', message);
                 try {
                     switch (message.type) {
                         case 'getSettings': {
@@ -101,16 +113,24 @@ export class PromptPanelProvider {
                         }
                         case 'getModels': {
                             const settings = await this.settingsManager.getGlobalSettings();
-                            const apiKey = settings.openaiApiKey;
-                            console.log("API Key from settings:", apiKey);
+                            const modelsByProvider: ModelsByProvider = {
+                                openai: [],
+                                anthropic: []
+                            };
                             
-                            if (apiKey) {
-                                const models = await this.fetchOpenAIModels(apiKey);
-                                this.panel?.webview.postMessage({
-                                    type: 'models',
-                                    models: models
-                                });
+                            if (settings.openaiApiKey) {
+                                modelsByProvider.openai = await this.fetchOpenAIModels(settings.openaiApiKey);
                             }
+                            
+                            if (settings.anthropicApiKey) {
+                                console.log("GOT API KEY: ", settings.anthropicApiKey);
+                                modelsByProvider.anthropic = await this.fetchAnthropicModels(settings.anthropicApiKey);
+                            }
+
+                            this.panel?.webview.postMessage({
+                                type: 'models',
+                                models: modelsByProvider
+                            });
                             break;
                         }
                     }
@@ -178,6 +198,23 @@ export class PromptPanelProvider {
             return list.data;
         } catch (error) {
             console.error('Error fetching OpenAI models:', error);
+            return [];
+        }
+    }
+
+    private async fetchAnthropicModels(apiKey: string): Promise<AnthropicType.ModelInfo[]> {
+        try {
+            console.log("IN ANTHROPIC FETCH", apiKey);
+            const client = new Anthropic({
+                apiKey: apiKey
+            });
+
+            const response = await client.models.list();
+            console.log("HERE");
+            console.log(response);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching Anthropic models:', error);
             return [];
         }
     }
