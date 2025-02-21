@@ -3,7 +3,9 @@
 import * as vscode from 'vscode';
 import { createFileExplorerView } from './views/file_explorer_view';
 import { PromptPanelProvider } from './providers/prompt_panel_provider';
-import { FileTreeProvider } from './providers/file_tree_provider';
+import { FileTreeProvider, FileTreeItem } from './providers/file_tree_provider';
+import * as path from 'path';
+import * as fs from 'fs';
 
 
 // this method is called when your extension is activated
@@ -33,8 +35,20 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	// Register the toggle command
-	const toggleCommand = vscode.commands.registerCommand('promptRepo.toggleSelection', 
-		(item) => fileExplorer.fileTreeProvider.toggleSelection(item));
+	const toggleCommand = vscode.commands.registerCommand(
+		'promptPilot.toggleSelection', 
+		async (fsPath: string) => {
+			const uri = vscode.Uri.file(fsPath);
+			const item = new FileTreeItem(
+				path.basename(fsPath),
+				fs.statSync(fsPath).isDirectory() 
+					? vscode.TreeItemCollapsibleState.Collapsed 
+					: vscode.TreeItemCollapsibleState.None,
+				uri
+			);
+			await fileExplorer.fileTreeProvider.toggleSelection(item);
+		}
+	);
 
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand

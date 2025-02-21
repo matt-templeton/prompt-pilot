@@ -263,7 +263,7 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
                         item.command = {
                             command: 'promptPilot.toggleSelection',
                             title: 'Toggle Selection',
-                            arguments: [item]
+                            arguments: [resourceUri.fsPath]
                         };
 
                         return item;
@@ -320,11 +320,11 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
                     this.selectedFiles.has(resourceUri.fsPath)
                 );
 
-                // Add click handler
+                // Update the command to only pass the resource URI
                 item.command = {
                     command: 'promptPilot.toggleSelection',
                     title: 'Toggle Selection',
-                    arguments: [item]
+                    arguments: [resourceUri.fsPath]
                 };
                 
                 return item;
