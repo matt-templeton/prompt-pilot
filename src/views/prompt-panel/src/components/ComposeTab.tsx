@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Button, Typography, Select, MenuItem, FormControl, InputLabel, ListSubheader } from '@mui/material';
+import { Box, Button, Typography, Select, MenuItem, FormControl, InputLabel, ListSubheader, SelectChangeEvent } from '@mui/material';
 import InstructionsBox from './InstructionsBox';
 import FileExplorerBox from './FileExplorerBox';
 import { useVSCode } from '../contexts/VSCodeContext';
@@ -47,6 +47,16 @@ const ComposeTab = () => {
     return () => window.removeEventListener('message', handleMessage);
   }, [vscode]);
 
+  const handleModelChange = (e: SelectChangeEvent<string>) => {
+    const modelId = e.target.value;
+    setSelectedModel(modelId);
+    
+    vscode.postMessage({
+      type: 'modelSelected',
+      modelId: modelId
+    });
+  };
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100vh' }}>
       <InstructionsBox />
@@ -68,7 +78,7 @@ const ComposeTab = () => {
               labelId="model-select-label"
               value={selectedModel}
               label="Model"
-              onChange={(e) => setSelectedModel(e.target.value)}
+              onChange={handleModelChange}
               size="small"
             >
               {modelsByProvider.anthropic.length > 0 && (

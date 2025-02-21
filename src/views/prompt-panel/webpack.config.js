@@ -17,9 +17,17 @@ module.exports = {
         test: /\.css$/,
         use: ['style-loader', 'css-loader'],
       },
+      {
+        test: /\.wasm$/,
+        type: "webassembly/async"
+      }
     ],
   },
   resolve: {
     extensions: ['.tsx', '.ts', '.js'],
+  },
+  experiments: {
+    asyncWebAssembly: true,
+    layers: true
   },
 }; 

@@ -5,6 +5,7 @@ import { SettingsManager } from '../services/SettingsManager';
 import OpenAI from 'openai';
 import { Anthropic } from '@anthropic-ai/sdk';
 import type { Anthropic as AnthropicType } from '@anthropic-ai/sdk';
+import { encoding_for_model, TiktokenModel } from "tiktoken";
 
 interface OpenAIModel {
   id: string;
@@ -31,6 +32,7 @@ export class PromptPanelProvider {
     public static readonly viewType = 'promptPilot.promptPanel';
     private panel: vscode.WebviewPanel | undefined;
     private settingsManager: SettingsManager;
+    private selectedModel = '';
 
     constructor(
         private readonly context: vscode.ExtensionContext,
@@ -91,11 +93,10 @@ export class PromptPanelProvider {
                             break;
                         }
                         case 'getSelectedFiles': {
-                            const files = this.fileTreeProvider.getSelectedFiles();
-                            console.log('PromptPanelProvider: Sending selected files to webview:', files);
+                            // Send current selection to webview
                             this.panel?.webview.postMessage({
                                 type: 'selectedFiles',
-                                files: files
+                                files: message.files || []
                             });
                             break;
                         }
@@ -133,10 +134,42 @@ export class PromptPanelProvider {
                             });
                             break;
                         }
+                        case 'selectedFiles': {
+                            // Handle selection updates with tokenization
+                            const filesWithTokens = await Promise.all(
+                                message.files.map(async (file: { path: string; isDirectory: boolean }) => ({
+                                    ...file,
+                                    tokenCount: file.isDirectory ? null :
+                                        await this.handleFileContent(file.path, this.selectedModel)
+                                }))
+                            );
+                            
+                            this.panel?.webview.postMessage({
+                                type: 'selectedFiles',
+                                files: filesWithTokens
+                            });
+                            break;
+                        }
+                        case 'getFileContent': {
+                            try {
+                                const content = await vscode.workspace.fs.readFile(vscode.Uri.file(message.path));
+                                this.panel?.webview.postMessage({
+                                    type: 'fileContent',
+                                    path: message.path,
+                                    content: new TextDecoder().decode(content)
+                                });
+                            } catch (error) {
+                                console.error('Error reading file:', error);
+                            }
+                            break;
+                        }
+                        case 'modelSelected':
+                            this.selectedModel = message.modelId || '';
+                            break;
                     }
                 } catch (error) {
                     console.error('Error handling message:', error);
-                    vscode.window.showErrorMessage('Failed to update settings');
+                    vscode.window.showErrorMessage('Failed to process request');
                 }
             },
             undefined,
@@ -144,11 +177,20 @@ export class PromptPanelProvider {
         );
 
         // Add listener for selection changes
-        this.fileTreeProvider.onDidChangeSelection(files => {
-            console.log('PromptPanelProvider: Selection changed, sending to webview:', files);
+        this.fileTreeProvider.onDidChangeSelection(async files => {
+            console.log('PromptPanelProvider: Selection changed, tokenizing files...');
+            
+            const filesWithTokens = await Promise.all(
+                files.map(async file => ({
+                    ...file,
+                    tokenCount: file.isDirectory ? null :
+                        await this.handleFileContent(file.path, this.selectedModel)
+                }))
+            );
+
             this.panel?.webview.postMessage({
                 type: 'selectedFiles',
-                files: files
+                files: filesWithTokens
             });
         });
 
@@ -166,7 +208,8 @@ export class PromptPanelProvider {
             path.join(this.context.extensionPath, 'src', 'views', 'prompt-panel', 'build', 'bundle.js')
         );
         const scriptUri = this.panel!.webview.asWebviewUri(scriptPathOnDisk);
-
+        console.log("WE ARE HERE!");
+        console.log(scriptUri);
         return `<!DOCTYPE html>
             <html lang="en">
             <head>
@@ -216,6 +259,50 @@ export class PromptPanelProvider {
         } catch (error) {
             console.error('Error fetching Anthropic models:', error);
             return [];
+        }
+    }
+
+    private countTokens(text: string, modelId: string): number | null {
+        try {
+            const enc = encoding_for_model(modelId as TiktokenModel);
+            console.log("counting tokens....");
+            const tokens = enc.encode(text);
+            console.log(tokens);
+            const count = tokens.length;
+            console.log("COUNT: ", count);
+            enc.free();
+            return count;
+        } catch (error) {
+            console.error('Error counting tokens:', error);
+            return null;
+        }
+    }
+
+    private getTokenizerType(modelId: string): 'openai' | 'anthropic' | null {
+        console.log("getTokenizerType", modelId);
+        if (modelId.startsWith('gpt-') || modelId.includes('text-davinci')) {
+            return 'openai';
+        } else if (modelId.startsWith('claude-')) {
+            return 'anthropic';
+        }
+        return null;
+    }
+
+    private async handleFileContent(path: string, modelId: string): Promise<number | null> {
+        try {
+            console.log("CHECKPOITN handleFileContent");
+            console.log(path, modelId);
+            const content = await vscode.workspace.fs.readFile(vscode.Uri.file(path));
+            const text = new TextDecoder().decode(content);
+            const tokenizerType = this.getTokenizerType(modelId);
+            console.log("handleFileContent", tokenizerType);
+            if (tokenizerType === 'openai') {
+                return this.countTokens(text, modelId);
+            }
+            return null;
+        } catch (error) {
+            console.error('Error reading file:', error);
+            return null;
         }
     }
 

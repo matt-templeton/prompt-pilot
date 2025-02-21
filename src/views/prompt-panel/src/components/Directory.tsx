@@ -10,6 +10,7 @@ interface DirectoryProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   onFileDelete: (file: string) => void;
+  tokenCounts: Map<string, number | null>;
 }
 
 const Directory: React.FC<DirectoryProps> = ({
@@ -17,7 +18,8 @@ const Directory: React.FC<DirectoryProps> = ({
   files,
   isExpanded,
   onToggleExpand,
-  onFileDelete
+  onFileDelete,
+  tokenCounts
 }) => {
   // Get just the last part of the path for display
   const displayName = fullPath === '.' 
@@ -56,15 +58,13 @@ const Directory: React.FC<DirectoryProps> = ({
         }}>
           {files.map((file) => {
             const filename = file.split(/[/\\]/).pop() || '';
-            // Generate a random token count between 0.1k and 2.0k for demonstration
-            const dummyTokenCount = +(Math.random() * 1.9 + 0.1).toFixed(1);
-            
+            const tokenCount = tokenCounts.get(file) ?? null;
             return (
               <FilePill
                 key={file}
                 filename={filename}
                 directory={fullPath}
-                tokenCount={dummyTokenCount}
+                tokenCount={tokenCount}
                 onDelete={() => onFileDelete(file)}
               />
             );

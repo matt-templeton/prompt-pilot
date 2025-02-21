@@ -1,4 +1,4 @@
-type MessageType = 'getSettings' | 'settings' | 'updateSettings' | 'getSelectedFiles' | 'toggleFileSelection' | 'selectedFiles';
+type MessageType = 'getSettings' | 'settings' | 'updateSettings' | 'getSelectedFiles' | 'toggleFileSelection' | 'selectedFiles' | 'getFileContent' | 'fileContent' | 'modelSelected';
 
 interface WebviewMessage {
     type: MessageType;
@@ -6,9 +6,15 @@ interface WebviewMessage {
         openaiApiKey?: string;
         anthropicApiKey?: string;
     };
-    files?: {path: string; isDirectory: boolean}[];
+    files?: {
+        path: string; 
+        isDirectory: boolean;
+        tokenCount?: number | null;  // Add token count to file info
+    }[];
     file?: string;
     action?: 'check' | 'uncheck';
+    content?: string;
+    modelId?: string;  // Add model ID field
 }
 
 interface VSCodeState {

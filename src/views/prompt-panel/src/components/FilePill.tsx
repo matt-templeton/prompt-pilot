@@ -5,11 +5,13 @@ import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 interface FilePillProps {
   filename: string;
   directory: string;
-  tokenCount: number;
+  tokenCount: number | null;
   onDelete: () => void;
 }
 
 const FilePill: React.FC<FilePillProps> = ({ filename, tokenCount, onDelete }) => {
+  console.log("IN FilePill!!!1");
+  console.log(tokenCount);
   return (
     <Chip
       icon={
@@ -25,7 +27,7 @@ const FilePill: React.FC<FilePillProps> = ({ filename, tokenCount, onDelete }) =
           display: 'flex', 
           flexDirection: 'column',
           ml: 1,
-          width: '100%' // Ensure the content takes full width
+          width: '100%'
         }}>
           <Typography 
             variant="body2" 
@@ -47,18 +49,18 @@ const FilePill: React.FC<FilePillProps> = ({ filename, tokenCount, onDelete }) =
               mt: 0.5
             }}
           >
-            ~{tokenCount}k tokens
+            {tokenCount !== null ? `~${tokenCount} tokens` : ''}
           </Typography>
         </Box>
       }
       onDelete={onDelete}
       sx={{
         height: 'auto',
-        width: 'calc(50% - 8px)', // Set width to 50% minus half the gap
+        width: 'calc(50% - 8px)',
         '& .MuiChip-label': {
           display: 'block',
           padding: '8px 4px',
-          width: '100%' // Ensure the label takes full width
+          width: '100%'
         },
         backgroundColor: 'rgba(255, 255, 255, 0.05)',
         '&:hover': {

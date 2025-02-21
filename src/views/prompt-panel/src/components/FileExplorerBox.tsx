@@ -3,30 +3,55 @@ import { Box, Paper, Typography } from '@mui/material';
 import Directory from './Directory';
 import { useVSCode } from '../contexts/VSCodeContext';
 
-// Get vscode API
-// console.log("HERERERE????");
-// const vscodeApi = acquireVsCodeApi();
-// console.log("vscodeApi: ", vscodeApi);
 type DirectoryMap = Record<string, string[]>;
 
-// Add the interface
 interface SelectedPath {
   path: string;
   isDirectory: boolean;
+  tokenCount?: number | null;
 }
 
-const FileExplorerBox = () => {
-  const vscodeApi = useVSCode();  // Use the context hook instead of direct acquisition
+const FileExplorerBox: React.FC = () => {
+  const vscodeApi = useVSCode();
   const [directoryMap, setDirectoryMap] = useState<DirectoryMap>({});
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
+  const [fileTokens, setFileTokens] = useState<Map<string, number | null>>(new Map());
+
+  const handleSelectedFilesUpdate = (files: SelectedPath[]) => {
+    const newDirectoryMap: DirectoryMap = {};
+    const newFileTokens = new Map<string, number | null>();
+    
+    files.forEach(({path, tokenCount}) => {
+      const pathParts = path.split(/[/\\]/);
+      pathParts.pop();
+      const dirPath = pathParts.join('/') || '.';
+      
+      if (!newDirectoryMap[dirPath]) {
+        newDirectoryMap[dirPath] = [];
+      }
+      newDirectoryMap[dirPath].push(path);
+      
+      // Store token count if provided
+      if (tokenCount !== undefined) {
+        newFileTokens.set(path, tokenCount);
+      }
+    });
+
+    setDirectoryMap(newDirectoryMap);
+    setFileTokens(newFileTokens);
+    
+    // Update expanded dirs
+    const newDirs = Object.keys(newDirectoryMap);
+    setExpandedDirs(prev => {
+      const next = new Set(prev);
+      newDirs.forEach(dir => next.add(dir));
+      return next;
+    });
+  };
 
   useEffect(() => {
-    console.log('FileExplorerBox: Setting up message listener');
-    
     const messageHandler = (event: MessageEvent) => {
-      console.log('FileExplorerBox: Received message:', event.data);
       const message = event.data;
-      
       if (message.type === 'selectedFiles') {
         handleSelectedFilesUpdate(message.files);
       }
@@ -36,38 +61,14 @@ const FileExplorerBox = () => {
     vscodeApi.postMessage({ type: 'getSelectedFiles' });
 
     return () => window.removeEventListener('message', messageHandler);
-  }, [vscodeApi]);  // Add vscodeApi to dependency array
+  }, [vscodeApi]);
 
-  const handleSelectedFilesUpdate = (selectedPaths: SelectedPath[]) => {
-    const newDirectoryMap: DirectoryMap = {};
-    console.log("SELECTED FILES UPDATE");
-    console.log(selectedPaths);
-
-    // Filter out directories and only process files
-    const files = selectedPaths.filter(item => !item.isDirectory);
-    
-    files.forEach(({path}) => {
-      const pathParts = path.split(/[/\\]/);
-      pathParts.pop(); // Remove filename
-      const dirPath = pathParts.join('/') || '.';
-      
-      if (!newDirectoryMap[dirPath]) {
-        newDirectoryMap[dirPath] = [];
-      }
-      newDirectoryMap[dirPath].push(path);
+  const handleFileDelete = (fileToDelete: string) => {
+    vscodeApi.postMessage({
+      type: 'toggleFileSelection',
+      action: 'uncheck',
+      file: fileToDelete
     });
-
-    // Get all unique directory paths
-    const newDirs = Object.keys(newDirectoryMap);
-    
-    // Update expanded dirs to include all directories
-    setExpandedDirs(prev => {
-      const next = new Set(prev);
-      newDirs.forEach(dir => next.add(dir));
-      return next;
-    });
-
-    setDirectoryMap(newDirectoryMap);
   };
 
   const toggleDirectory = (directory: string) => {
@@ -79,14 +80,6 @@ const FileExplorerBox = () => {
         next.add(directory);
       }
       return next;
-    });
-  };
-
-  const handleFileDelete = (fileToDelete: string) => {
-    vscodeApi.postMessage({
-      type: 'toggleFileSelection',
-      action: 'uncheck',
-      file: fileToDelete
     });
   };
 
@@ -112,6 +105,7 @@ const FileExplorerBox = () => {
             isExpanded={expandedDirs.has(dirPath)}
             onToggleExpand={() => toggleDirectory(dirPath)}
             onFileDelete={handleFileDelete}
+            tokenCounts={fileTokens}
           />
         ))}
       </Box>
