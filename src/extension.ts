@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { OpenAI } from 'openai';
 import type { Anthropic as AnthropicType } from '@anthropic-ai/sdk';
+import { StorageManager } from './services/StorageManager';
 
 interface OpenAIModel {
 	id: string;
@@ -28,7 +29,7 @@ interface ModelsByProvider {
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
 
@@ -140,6 +141,14 @@ export function activate(context: vscode.ExtensionContext) {
 		fileExplorer.fileTreeProvider.setSearchQuery(''); // Clear search
 		fileExplorer.fileTreeProvider.refresh(); // Refresh view
 	});
+
+	// Initialize storage manager
+	try {
+		const storageManager = StorageManager.getInstance(context);
+		await storageManager.initialize();
+	} catch (error) {
+		console.error('Failed to initialize storage manager:', error);
+	}
 
 	context.subscriptions.push(
 		fileExplorer, 

@@ -21,7 +21,7 @@ interface ModelsByProvider {
 const ComposeTab: React.FC = () => {
   console.log("ComposeTab: Component mounting");
   const vscode = useVSCode();
-  const { setSelectedModel } = useModel();
+  const { selectedModel, setSelectedModel } = useModel();
   const [modelsByProvider, setModelsByProvider] = useState<ModelsByProvider>({ openai: [], anthropic: [] });
   
   useEffect(() => {
