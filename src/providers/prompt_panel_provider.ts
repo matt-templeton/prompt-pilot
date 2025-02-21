@@ -3,6 +3,27 @@ import * as path from 'path';
 import { FileTreeProvider } from './file_tree_provider';
 import { SettingsManager } from '../services/SettingsManager';
 
+interface OpenAIModel {
+  id: string;
+  created: number;
+  owned_by: string;
+}
+
+interface OpenAIModelsResponse {
+  data: OpenAIModel[];
+  object: string;
+}
+
+interface WebviewMessage {
+    type: string;
+    models?: OpenAIModel[];
+    settings?: {
+        openaiApiKey?: string;
+        anthropicApiKey?: string;
+    };
+    files?: {path: string; isDirectory: boolean}[];
+}
+
 export class PromptPanelProvider {
     public static readonly viewType = 'promptPilot.promptPanel';
     private panel: vscode.WebviewPanel | undefined;
@@ -82,6 +103,20 @@ export class PromptPanelProvider {
                             }
                             break;
                         }
+                        case 'getModels': {
+                            const settings = await this.settingsManager.getGlobalSettings();
+                            const apiKey = settings.openaiApiKey;
+                            console.log("API Key from settings:", apiKey);
+                            
+                            if (apiKey) {
+                                const models = await this.fetchOpenAIModels(apiKey);
+                                this.panel?.webview.postMessage({
+                                    type: 'models',
+                                    models: models
+                                });
+                            }
+                            break;
+                        }
                     }
                 } catch (error) {
                     console.error('Error handling message:', error);
@@ -134,5 +169,32 @@ export class PromptPanelProvider {
                 <script src="${scriptUri}"></script>
             </body>
             </html>`;
+    }
+
+    private async fetchOpenAIModels(apiKey: string): Promise<OpenAIModel[]> {
+        try {
+            console.log("fetchOpenAIModels", apiKey);
+            const response = await fetch('https://api.openai.com/v1/models', {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            console.log(response);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json() as OpenAIModelsResponse;
+            console.log(data);
+            return data.data;
+        } catch (error) {
+            console.error('Error fetching OpenAI models:', error);
+            return [];
+        }
+    }
+
+    public postMessageToWebview(message: WebviewMessage) {
+        this.panel?.webview.postMessage(message);
     }
 } 

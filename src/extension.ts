@@ -7,6 +7,11 @@ import { FileTreeProvider, FileTreeItem } from './providers/file_tree_provider';
 import * as path from 'path';
 import * as fs from 'fs';
 
+interface OpenAIModel {
+	id: string;
+	created: number;
+	owned_by: string;
+}
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -23,6 +28,45 @@ export function activate(context: vscode.ExtensionContext) {
 	
 	// Create and register the prompt panel provider with injected dependencies
 	const promptPanelProvider = new PromptPanelProvider(context, fileTreeProvider);
+	
+	// Add this function to fetch OpenAI models
+	async function fetchOpenAIModels(apiKey: string): Promise<OpenAIModel[]> {
+		try {
+			const response = await fetch('https://api.openai.com/v1/models', {
+				headers: {
+					'Authorization': `Bearer ${apiKey}`,
+					'Content-Type': 'application/json'
+				}
+			});
+			
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+			
+			const data = await response.json();
+			return data.data;
+		} catch (error) {
+			console.error('Error fetching OpenAI models:', error);
+			return [];
+		}
+	}
+
+	// Add this to handle model fetching
+	context.subscriptions.push(
+		vscode.workspace.onDidChangeConfiguration(async (e) => {
+			if (e.affectsConfiguration('promptPilot.openaiApiKey')) {
+				const config = vscode.workspace.getConfiguration('promptPilot');
+				const apiKey = config.get<string>('openaiApiKey') || '';
+				if (apiKey) {
+					const models = await fetchOpenAIModels(apiKey);
+					promptPanelProvider.postMessageToWebview({
+						type: 'models',
+						models: models
+					});
+				}
+			}
+		})
+	);
 	
 	// Subscribe to selection changes
 	fileTreeProvider.onDidChangeSelection(files => {

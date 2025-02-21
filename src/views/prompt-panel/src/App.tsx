@@ -64,9 +64,7 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-console.log("BEFORE APP PROPS");
 function App() {
-  console.log("IN APP");
   const [tabValue, setTabValue] = useState(0);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
