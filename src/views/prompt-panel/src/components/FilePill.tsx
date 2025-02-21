@@ -11,6 +11,10 @@ interface FilePillProps {
 const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
   console.log("IN FilePill!!!1");
   console.log(tokenCount);
+  
+  // Extract filename from full path
+  const filename = path.split(/[/\\]/).pop() || path;
+  
   return (
     <Chip
       icon={
@@ -38,7 +42,7 @@ const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
               whiteSpace: 'nowrap'
             }}
           >
-            {path}
+            {filename}
           </Typography>
           <Typography 
             variant="caption" 

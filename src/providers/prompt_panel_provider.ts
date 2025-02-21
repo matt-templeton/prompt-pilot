@@ -191,6 +191,24 @@ export class PromptPanelProvider {
                             }
                             break;
                         }
+                        case 'retokenizeFiles': {
+                            console.log("IN RETORKENIZE!!!");
+                            const { files, model } = message;
+                            console.log(files, model);
+                            const filesWithTokens = await Promise.all(
+                                files.map(async (file: { path: string; isDirectory: boolean }) => ({
+                                    ...file,
+                                    tokenCount: file.isDirectory ? null :
+                                        await this.handleFileContent(file.path, model)
+                                }))
+                            );
+
+                            this.postMessageToWebview({
+                                type: 'selectedFiles',
+                                files: filesWithTokens
+                            });
+                            break;
+                        }
                     }
                 } catch (error) {
                     console.error('Error handling message:', error);

@@ -4,6 +4,7 @@ import './App.css';
 import ComposeTab from './components/ComposeTab';
 import SettingsTab from './components/SettingsTab';
 import { VSCodeProvider } from './contexts/VSCodeContext';
+import { ModelProvider } from './contexts/ModelContext';
 // import PlanTab from './components/PlanTab';
 
 // Create theme that uses VSCode colors
@@ -77,31 +78,33 @@ function App() {
   };
 
   return (
-    <VSCodeProvider>
-      <ThemeProvider theme={theme}>
-        <Box className="App">
-          <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-            <Tabs value={tabValue} onChange={handleTabChange}>
-              <Tab label="Compose" />
-              <Tab label="Plan" />
-              <Tab label="Settings" />
-            </Tabs>
-          </Box>
-          
-          <TabPanel value={tabValue} index={0}>
-            <ComposeTab />
-          </TabPanel>
-          
-          <TabPanel value={tabValue} index={1}>
-            {/* <PlanTab /> */}
-          </TabPanel>
+    <ModelProvider>
+      <VSCodeProvider>
+        <ThemeProvider theme={theme}>
+          <Box className="App">
+            <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+              <Tabs value={tabValue} onChange={handleTabChange}>
+                <Tab label="Compose" />
+                <Tab label="Plan" />
+                <Tab label="Settings" />
+              </Tabs>
+            </Box>
+            
+            <TabPanel value={tabValue} index={0}>
+              <ComposeTab />
+            </TabPanel>
+            
+            <TabPanel value={tabValue} index={1}>
+              {/* <PlanTab /> */}
+            </TabPanel>
 
-          <TabPanel value={tabValue} index={2}>
-            <SettingsTab />
-          </TabPanel>
-        </Box>
-      </ThemeProvider>
-    </VSCodeProvider>
+            <TabPanel value={tabValue} index={2}>
+              <SettingsTab />
+            </TabPanel>
+          </Box>
+        </ThemeProvider>
+      </VSCodeProvider>
+    </ModelProvider>
   );
 }
 

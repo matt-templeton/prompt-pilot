@@ -2,6 +2,7 @@ import React, { useEffect, useState, memo } from 'react';
 import { Box, Paper, Typography } from '@mui/material';
 import Directory from './Directory';
 import { useVSCode } from '../contexts/VSCodeContext';
+import { useModel } from '../contexts/ModelContext';
 
 type DirectoryMap = Record<string, string[]>;
 
@@ -13,6 +14,7 @@ interface SelectedPath {
 
 const FileExplorerBox: React.FC = () => {
   const vscodeApi = useVSCode();
+  const { selectedModel } = useModel();
   const [directoryMap, setDirectoryMap] = useState<DirectoryMap>({});
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [fileTokens, setFileTokens] = useState<Map<string, number | null>>(new Map());
@@ -54,6 +56,7 @@ const FileExplorerBox: React.FC = () => {
     const messageHandler = (event: MessageEvent) => {
       const message = event.data;
       console.log("=== FILEEXPLORERBOX MESSAGE ===", message);
+      
       if (message.type === 'selectedFiles') {
         console.log("Handling selectedFiles message:", message.files);
         handleSelectedFilesUpdate(message.files);
@@ -73,7 +76,7 @@ const FileExplorerBox: React.FC = () => {
       console.log("=== FILEEXPLORERBOX UNMOUNTED ===");
       window.removeEventListener('message', messageHandler);
     };
-  }, [vscodeApi, initialized, directoryMap]);
+  }, [vscodeApi, initialized, directoryMap, selectedModel]);
 
   const handleFileDelete = (fileToDelete: string) => {
     vscodeApi.postMessage({

@@ -5,6 +5,7 @@ import FileExplorerBox from './FileExplorerBox';
 import { useVSCode } from '../contexts/VSCodeContext';
 // import { Anthropic } from '@anthropic-ai/sdk';
 import type { Anthropic as AnthropicType } from '@anthropic-ai/sdk';
+import { useModel } from '../contexts/ModelContext';
 
 interface OpenAIModel {
   id: string;
@@ -17,11 +18,11 @@ interface ModelsByProvider {
   anthropic: AnthropicType.ModelInfo[];
 }
 
-const ComposeTab = () => {
+const ComposeTab: React.FC = () => {
   console.log("ComposeTab: Component mounting");
   const vscode = useVSCode();
+  const { setSelectedModel } = useModel();
   const [modelsByProvider, setModelsByProvider] = useState<ModelsByProvider>({ openai: [], anthropic: [] });
-  const [selectedModel, setSelectedModel] = useState<string>('');
   
   useEffect(() => {
     console.log("ComposeTab: Setting up message listener");
@@ -29,25 +30,21 @@ const ComposeTab = () => {
     // Request models from extension
     vscode.postMessage({ type: 'getModels' });
 
-    const handleMessage = (event: MessageEvent) => {
-      console.log("handleMessage:, ", event);
+    const messageHandler = (event: MessageEvent) => {
       const message = event.data;
+      console.log("ComposeTab: Message received:", message);
+      
       if (message.type === 'models') {
         setModelsByProvider(message.models);
-        // Use the selected model from the message or fall back to default
-        if (message.selectedModel) {
-          setSelectedModel(message.selectedModel);
-        } else if (message.models.anthropic.length > 0) {
-          setSelectedModel(message.models.anthropic[0].id);
-        } else if (message.models.openai.length > 0) {
-          setSelectedModel(message.models.openai[0].id);
-        }
+        setSelectedModel(message.selectedModel);
+        // Need to forward this to FileExplorerBox
+        window.postMessage(message, '*');
       }
     };
 
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [vscode]);
+    window.addEventListener('message', messageHandler);
+    return () => window.removeEventListener('message', messageHandler);
+  }, [vscode, setSelectedModel]);
 
   const handleModelChange = (e: SelectChangeEvent<string>) => {
     const modelId = e.target.value;
