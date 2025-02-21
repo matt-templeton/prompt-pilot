@@ -1,15 +1,19 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { FileTreeProvider } from './file_tree_provider';
+import { SettingsManager } from '../services/SettingsManager';
 
 export class PromptPanelProvider {
     public static readonly viewType = 'promptPilot.promptPanel';
     private panel: vscode.WebviewPanel | undefined;
+    private settingsManager: SettingsManager;
 
     constructor(
         private readonly context: vscode.ExtensionContext,
         private readonly fileTreeProvider: FileTreeProvider
-    ) {}
+    ) {
+        this.settingsManager = new SettingsManager(context);
+    }
 
     public showPanel() {
         const columnToShowIn = vscode.window.activeTextEditor
@@ -40,28 +44,48 @@ export class PromptPanelProvider {
         this.panel.webview.onDidReceiveMessage(
             async message => {
                 console.log('PromptPanelProvider: Received message from webview:', message);
-                switch (message.type) {
-                    case 'getSelectedFiles': {
-                        const files = this.fileTreeProvider.getSelectedFiles();
-                        console.log('PromptPanelProvider: Sending selected files to webview:', files);
-                        this.panel?.webview.postMessage({
-                            type: 'selectedFiles',
-                            files: files
-                        });
-                        break;
-                    }
-                    case 'toggleFileSelection': {
-                        if (message.action === 'uncheck') {
-                            // Handle uncheck action
-                            await this.fileTreeProvider.uncheckItemByPath(message.file);
-                        } else {
-                            // Handle regular toggle
-                            vscode.commands.executeCommand('promptRepo.toggleSelection', {
-                                resourceUri: vscode.Uri.file(message.file)
+                try {
+                    switch (message.type) {
+                        case 'getSettings': {
+                            const settings = await this.settingsManager.getGlobalSettings();
+                            this.panel?.webview.postMessage({
+                                type: 'settings',
+                                settings: settings
                             });
+                            break;
                         }
-                        break;
+                        case 'updateSettings': {
+                            const { settings } = message;
+                            await this.settingsManager.setGlobalSetting('openaiApiKey', settings.openaiApiKey);
+                            await this.settingsManager.setGlobalSetting('anthropicApiKey', settings.anthropicApiKey);
+                            vscode.window.showInformationMessage('Settings saved successfully');
+                            break;
+                        }
+                        case 'getSelectedFiles': {
+                            const files = this.fileTreeProvider.getSelectedFiles();
+                            console.log('PromptPanelProvider: Sending selected files to webview:', files);
+                            this.panel?.webview.postMessage({
+                                type: 'selectedFiles',
+                                files: files
+                            });
+                            break;
+                        }
+                        case 'toggleFileSelection': {
+                            if (message.action === 'uncheck') {
+                                // Handle uncheck action
+                                await this.fileTreeProvider.uncheckItemByPath(message.file);
+                            } else {
+                                // Handle regular toggle
+                                vscode.commands.executeCommand('promptRepo.toggleSelection', {
+                                    resourceUri: vscode.Uri.file(message.file)
+                                });
+                            }
+                            break;
+                        }
                     }
+                } catch (error) {
+                    console.error('Error handling message:', error);
+                    vscode.window.showErrorMessage('Failed to update settings');
                 }
             },
             undefined,
@@ -98,10 +122,15 @@ export class PromptPanelProvider {
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>Prompt Pilot</title>
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${this.panel!.webview.cspSource} 'unsafe-inline'; script-src ${this.panel!.webview.cspSource};">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${this.panel!.webview.cspSource} 'unsafe-inline'; script-src ${this.panel!.webview.cspSource} 'unsafe-inline';">
             </head>
             <body>
                 <div id="root"></div>
+                <script>
+                    // Acquire API before any React code runs
+                    const vscode = acquireVsCodeApi();
+                    window._vscodeApi = vscode;
+                </script>
                 <script src="${scriptUri}"></script>
             </body>
             </html>`;

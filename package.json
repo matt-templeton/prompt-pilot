@@ -89,5 +89,8 @@
 		"vscode-test": "^1.5.2",
 		"lru-cache": "^7.18.3",
 		"rimraf": "^5.0.1"
+	},
+	"dependencies": {
+		"@mui/icons-material": "^5.11.16"
 	}
 }

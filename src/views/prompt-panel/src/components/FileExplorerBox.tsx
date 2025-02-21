@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Paper, Typography } from '@mui/material';
 import Directory from './Directory';
+import { useVSCode } from '../contexts/VSCodeContext';
 
 // Get vscode API
-const vscodeApi = acquireVsCodeApi();
-
+// console.log("HERERERE????");
+// const vscodeApi = acquireVsCodeApi();
+// console.log("vscodeApi: ", vscodeApi);
 type DirectoryMap = Record<string, string[]>;
 
 // Add the interface
@@ -14,6 +16,7 @@ interface SelectedPath {
 }
 
 const FileExplorerBox = () => {
+  const vscodeApi = useVSCode();  // Use the context hook instead of direct acquisition
   const [directoryMap, setDirectoryMap] = useState<DirectoryMap>({});
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
 
@@ -33,7 +36,7 @@ const FileExplorerBox = () => {
     vscodeApi.postMessage({ type: 'getSelectedFiles' });
 
     return () => window.removeEventListener('message', messageHandler);
-  }, []);
+  }, [vscodeApi]);  // Add vscodeApi to dependency array
 
   const handleSelectedFilesUpdate = (selectedPaths: SelectedPath[]) => {
     const newDirectoryMap: DirectoryMap = {};
