@@ -38,8 +38,8 @@ export class PromptPanelProvider {
 
         // Set up message handling when panel is created
         this.panel.webview.onDidReceiveMessage(
-            message => {
-                console.log('PromptPanelProvider: HELLO Received message from webview:', message);
+            async message => {
+                console.log('PromptPanelProvider: Received message from webview:', message);
                 switch (message.type) {
                     case 'getSelectedFiles': {
                         const files = this.fileTreeProvider.getSelectedFiles();
@@ -51,9 +51,15 @@ export class PromptPanelProvider {
                         break;
                     }
                     case 'toggleFileSelection': {
-                        vscode.commands.executeCommand('promptRepo.toggleSelection', {
-                            resourceUri: vscode.Uri.file(message.file)
-                        });
+                        if (message.action === 'uncheck') {
+                            // Handle uncheck action
+                            await this.fileTreeProvider.uncheckItemByPath(message.file);
+                        } else {
+                            // Handle regular toggle
+                            vscode.commands.executeCommand('promptRepo.toggleSelection', {
+                                resourceUri: vscode.Uri.file(message.file)
+                            });
+                        }
                         break;
                     }
                 }

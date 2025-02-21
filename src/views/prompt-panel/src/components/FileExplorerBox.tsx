@@ -54,6 +54,16 @@ const FileExplorerBox = () => {
       newDirectoryMap[dirPath].push(path);
     });
 
+    // Get all unique directory paths
+    const newDirs = Object.keys(newDirectoryMap);
+    
+    // Update expanded dirs to include all directories
+    setExpandedDirs(prev => {
+      const next = new Set(prev);
+      newDirs.forEach(dir => next.add(dir));
+      return next;
+    });
+
     setDirectoryMap(newDirectoryMap);
   };
 
@@ -72,6 +82,7 @@ const FileExplorerBox = () => {
   const handleFileDelete = (fileToDelete: string) => {
     vscodeApi.postMessage({
       type: 'toggleFileSelection',
+      action: 'uncheck',
       file: fileToDelete
     });
   };

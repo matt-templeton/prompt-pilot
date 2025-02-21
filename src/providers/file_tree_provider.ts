@@ -69,20 +69,53 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
         return FileTreeProvider.instance;
     }
 
+    // Add this new helper method
+    private async getAllFilesInDirectory(dirPath: string): Promise<string[]> {
+        const files: string[] = [];
+        try {
+            const dirEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dirPath));
+            
+            for (const [name, type] of dirEntries) {
+                const fullPath = path.join(dirPath, name);
+                if (type === vscode.FileType.Directory) {
+                    // Recursively get files from subdirectory
+                    const subDirFiles = await this.getAllFilesInDirectory(fullPath);
+                    files.push(...subDirFiles);
+                } else {
+                    files.push(fullPath);
+                }
+            }
+        } catch (error) {
+            console.error('Error reading directory:', error);
+        }
+        return files;
+    }
+
     // Update toggle selection method
-    toggleSelection(item: FileTreeItem): void {
+    async toggleSelection(item: FileTreeItem): Promise<void> {
         console.log('FileTreeProvider: toggleSelection called', item.resourceUri.fsPath);
         const path = item.resourceUri.fsPath;
         const isDirectory = fs.statSync(path).isDirectory();
 
         if (this.selectedFiles.has(path)) {
+            // If unselecting a directory, remove all its files too
+            if (isDirectory) {
+                const allFiles = await this.getAllFilesInDirectory(path);
+                allFiles.forEach(file => this.selectedFiles.delete(file));
+            }
             this.selectedFiles.delete(path);
             item.updateCheckboxState(false);
         } else {
+            // If selecting a directory, add all its files too
+            if (isDirectory) {
+                const allFiles = await this.getAllFilesInDirectory(path);
+                allFiles.forEach(file => this.selectedFiles.add(file));
+            }
             this.selectedFiles.add(path);
             item.updateCheckboxState(true);
         }
 
+        this._onDidChangeTreeData.fire();
         this._onDidChangeSelection.fire(this.getSelectedFiles());
     }
 
@@ -308,6 +341,42 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
             path,
             isDirectory: fs.statSync(path).isDirectory()
         }));
+    }
+
+    // Add new method to uncheck item by path
+    async uncheckItemByPath(filePath: string): Promise<void> {
+        if (this.selectedFiles.has(filePath)) {
+            this.selectedFiles.delete(filePath);
+            
+            // Find and update the corresponding TreeItem
+            const items = await this.findTreeItemByPath(filePath);
+            items.forEach(item => item.updateCheckboxState(false));
+            
+            this._onDidChangeTreeData.fire();
+            this._onDidChangeSelection.fire(this.getSelectedFiles());
+        }
+    }
+
+    // Helper method to find TreeItem by path
+    private async findTreeItemByPath(targetPath: string): Promise<FileTreeItem[]> {
+        const items: FileTreeItem[] = [];
+        
+        // Helper function to search recursively
+        const searchInItems = async (parentItem?: FileTreeItem) => {
+            const children = await this.getChildren(parentItem);
+            for (const item of children) {
+                if (item.resourceUri.fsPath === targetPath) {
+                    items.push(item);
+                }
+                if (item.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed ||
+                    item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
+                    await searchInItems(item);
+                }
+            }
+        };
+
+        await searchInItems();
+        return items;
     }
 
     dispose() {
