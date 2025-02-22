@@ -13,6 +13,7 @@ import {
   ArgumentDefinition
 } from './types';
 import { OpenAI } from 'openai';
+import { loadPrompt } from './prompt-loader';
 
 export class ApiSurfaceEvaluator {
   private openai: OpenAI;
@@ -23,24 +24,13 @@ export class ApiSurfaceEvaluator {
     this.openai = new OpenAI({ apiKey: openaiApiKey });
     this.goldenDataset = goldenDataset;
     this.extractApiSurface = async (content: string) => {
-      const systemPrompt = `
-        You are an expert code analyzer. Extract the API surface from the provided code.
-        Include all classes, methods, properties, and standalone functions.
-        Preserve type information and documentation comments.
-        Return ONLY a JSON object with the following structure:
-        {
-          "classes": [...],
-          "functions": [...]
-        }
-      `;
-
+      const prompt = loadPrompt('surface');
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: content }
+          { role: "user", content: prompt.user.replace('${language}', 'unknown').replace('${code}', content) }
         ],
-        temperature: 0 // Add this for more consistent JSON output
+        temperature: 0
       });
 
       try {
@@ -101,7 +91,7 @@ export class ApiSurfaceEvaluator {
   /**
    * Computes accuracy metrics by comparing extracted and expected API surfaces
    */
-  private computeAccuracy(extracted: ApiSurface, expected: ApiSurface): AccuracyMetrics {
+  public computeAccuracy(extracted: ApiSurface, expected: ApiSurface): AccuracyMetrics {
     return {
       structural: this.computeStructuralAccuracy(extracted, expected),
       content: {
@@ -528,9 +518,13 @@ export class ApiSurfaceEvaluator {
   /**
    * Helper method to compute similarity between arrays of argument definitions
    */
-  private computeArgumentsSimilarity(extracted: ArgumentDefinition[], expected: ArgumentDefinition[]): number {
-    if (expected.length === 0) {
+  private computeArgumentsSimilarity(extracted: ArgumentDefinition[] | undefined, expected: ArgumentDefinition[] | undefined): number {
+    // Handle cases where either array is undefined
+    if (!expected || expected.length === 0) {
       return 1;
+    }
+    if (!extracted) {
+      return 0;
     }
 
     let totalScore = 0;
@@ -568,28 +562,38 @@ export class ApiSurfaceEvaluator {
   private detectFeatures(surface: ApiSurface): string[] {
     const features = new Set<string>();
 
+    // Ensure surface has required properties with defaults
+    const classes = surface.classes || [];
+    const functions = surface.functions || [];
+
     // Analyze classes
-    for (const cls of surface.classes) {
+    for (const cls of classes) {
       if (cls.description?.includes('@decorator')) {features.add('decorators');}
-      if (cls.methods.some(m => m.name.startsWith('get') || m.name.startsWith('set'))) {
+      if (cls.methods?.some(m => m.name.startsWith('get') || m.name.startsWith('set'))) {
         features.add('getters-setters');
       }
-      if (cls.methods.some(m => m.name.includes('static'))) {features.add('static-methods');}
+      if (cls.methods?.some(m => m.name.includes('static'))) {features.add('static-methods');}
       if (cls.description?.includes('@dataclass')) {features.add('dataclasses');}
     }
 
     // Analyze types
     const allTypes = [
-      ...surface.functions.flatMap(f => [f.return_type, ...f.arguments.map(a => a.type)]),
-      ...surface.classes.flatMap(c => [
-        ...c.methods.flatMap(m => [m.return_type, ...m.arguments.map(a => a.type)]),
-        ...c.properties.map(p => p.type)
+      ...functions.flatMap(f => [
+        f.return_type,
+        ...(f.arguments || []).map(a => a.type)
+      ]),
+      ...classes.flatMap(c => [
+        ...(c.methods || []).flatMap(m => [
+          m.return_type,
+          ...(m.arguments || []).map(a => a.type)
+        ]),
+        ...(c.properties || []).map(p => p.type)
       ])
-    ];
+    ].filter(Boolean); // Remove undefined/null values
 
-    if (allTypes.some(t => t.includes('<') && t.includes('>'))) {features.add('generics');}
-    if (allTypes.some(t => t !== 'any' && t !== 'unknown')) {features.add('type-annotations');}
-    if (allTypes.some(t => t.startsWith('Promise<'))) {features.add('async-await');}
+    if (allTypes.some(t => t?.includes('<') && t?.includes('>'))) {features.add('generics');}
+    if (allTypes.some(t => t && t !== 'any' && t !== 'unknown')) {features.add('type-annotations');}
+    if (allTypes.some(t => t?.startsWith('Promise<'))) {features.add('async-await');}
 
     return Array.from(features);
   }

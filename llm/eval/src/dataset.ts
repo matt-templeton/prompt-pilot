@@ -70,9 +70,33 @@ export class DatasetManager {
   }
 
   /**
+   * Check if a dataset with the given name exists
+   */
+  async getExistingDataset(name: string): Promise<string | null> {
+    try {
+      const datasets = [];
+      for await (const dataset of this.client.listDatasets()) {
+        datasets.push(dataset);
+      }
+      const existingDataset = datasets.find(d => d.name === name);
+      return existingDataset?.id || null;
+    } catch (error) {
+      console.error("Error checking for existing dataset:", error);
+      return null;
+    }
+  }
+
+  /**
    * Create a dataset in LangSmith from our examples
    */
   async createLangSmithDataset(name: string, description: string): Promise<string> {
+    // Check for existing dataset
+    const existingId = await this.getExistingDataset(name);
+    if (existingId) {
+      console.log(`Using existing dataset with ID: ${existingId}`);
+      return existingId;
+    }
+
     const examples = await this.loadGoldenDataset();
     
     // Create the dataset
