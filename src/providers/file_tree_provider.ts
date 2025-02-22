@@ -54,7 +54,6 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
     private isSearching = false;
 
     private constructor() {
-        console.log("FileTreeProvider: constructor!");
         // Make constructor private for singleton
         this.fileWatcher = vscode.workspace.createFileSystemWatcher('**/*');
         this.fileWatcher.onDidCreate(() => this.refresh());
@@ -93,7 +92,6 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
 
     // Update toggle selection method
     async toggleSelection(item: FileTreeItem): Promise<void> {
-        console.log('FileTreeProvider: toggleSelection called', item.resourceUri.fsPath);
         const path = item.resourceUri.fsPath;
         const isDirectory = fs.statSync(path).isDirectory();
 
@@ -124,7 +122,6 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
     }
 
     getTreeItem(element: FileTreeItem): vscode.TreeItem {
-        console.log("FileTreeProvider: getTreeItem: ", element);
         return element;
     }
 

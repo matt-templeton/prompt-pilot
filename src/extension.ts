@@ -16,12 +16,6 @@ interface OpenAIModel {
 	owned_by: string;
 }
 
-// interface AnthropicModel {
-// 	id: string;
-// 	created: number;
-// 	display_name: string;
-// }
-
 interface ModelsByProvider {
 	openai: OpenAIModel[];
 	anthropic: AnthropicType.ModelInfo[];
@@ -32,6 +26,17 @@ interface ModelsByProvider {
 export async function activate(context: vscode.ExtensionContext) {
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
+
+	// Initialize storage manager
+	try {
+		// In test mode, wait for test setup to initialize StorageManager
+		if (context.extensionMode !== vscode.ExtensionMode.Test) {
+			const storageManager = StorageManager.getInstance(context);
+			await storageManager.initialize();
+		}
+	} catch (error) {
+		console.error('Failed to initialize storage manager:', error);
+	}
 
 	// Get singleton instance of FileTreeProvider
 	const fileTreeProvider = FileTreeProvider.getInstance();
@@ -141,14 +146,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		fileExplorer.fileTreeProvider.setSearchQuery(''); // Clear search
 		fileExplorer.fileTreeProvider.refresh(); // Refresh view
 	});
-
-	// Initialize storage manager
-	try {
-		const storageManager = StorageManager.getInstance(context);
-		await storageManager.initialize();
-	} catch (error) {
-		console.error('Failed to initialize storage manager:', error);
-	}
 
 	context.subscriptions.push(
 		fileExplorer, 

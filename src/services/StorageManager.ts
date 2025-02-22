@@ -3,18 +3,23 @@ import * as crypto from 'crypto';
 import { ApiSurface, ApiSurfaceCache, CacheManifest } from '../types/storage';
 
 export class StorageManager {
-    private static instance: StorageManager;
+    private static instance: StorageManager | null = null;
     private storagePath: vscode.Uri;
     private surfacesPath: vscode.Uri;
     private manifest: CacheManifest;
     private readonly CACHE_VERSION = '1.0.0';
     private readonly CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
-    private constructor(private context: vscode.ExtensionContext) {
-        this.storagePath = vscode.Uri.joinPath(
-            context.storageUri || context.globalStorageUri,
-            'prompt-pilot-data'
-        );
+    private constructor(private context: vscode.ExtensionContext, testStoragePath?: string) {
+        // In test mode, use the provided test storage path
+        if (context.extensionMode === vscode.ExtensionMode.Test && testStoragePath) {
+            this.storagePath = vscode.Uri.file(testStoragePath);
+        } else {
+            this.storagePath = vscode.Uri.joinPath(
+                context.storageUri || context.globalStorageUri,
+                'prompt-pilot-data'
+            );
+        }
         this.surfacesPath = vscode.Uri.joinPath(this.storagePath, 'api-surfaces');
         this.manifest = {
             version: this.CACHE_VERSION,
@@ -22,11 +27,15 @@ export class StorageManager {
         };
     }
 
-    public static getInstance(context: vscode.ExtensionContext): StorageManager {
-        if (!StorageManager.instance) {
-            StorageManager.instance = new StorageManager(context);
+    public static getInstance(context: vscode.ExtensionContext, testStoragePath?: string): StorageManager {
+        if (!StorageManager.instance || (context.extensionMode === vscode.ExtensionMode.Test && testStoragePath)) {
+            StorageManager.instance = new StorageManager(context, testStoragePath);
         }
         return StorageManager.instance;
+    }
+
+    public static resetInstance(): void {
+        StorageManager.instance = null;
     }
 
     public async initialize(): Promise<void> {
@@ -41,6 +50,7 @@ export class StorageManager {
     }
 
     private async loadManifest(): Promise<void> {
+        console.log("Storage Path: ", this.storagePath);
         const manifestPath = vscode.Uri.joinPath(this.storagePath, 'manifest.json');
         try {
             const manifestData = await vscode.workspace.fs.readFile(manifestPath);

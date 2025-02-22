@@ -6,7 +6,8 @@ import OpenAI from 'openai';
 import { Anthropic } from '@anthropic-ai/sdk';
 import type { Anthropic as AnthropicType } from '@anthropic-ai/sdk';
 import { encoding_for_model, TiktokenModel } from "tiktoken";
-import * as fs from 'fs/promises';
+import * as fs from 'fs';
+import * as fsPromises from 'fs/promises';
 import { StorageManager } from '../services/StorageManager';
 
 interface OpenAIModel {
@@ -66,7 +67,22 @@ export class PromptPanelProvider {
             return;
         }
 
-        console.log("PromptPanelProvider: Creating new panel");
+        // Determine the correct extension root path based on mode
+        const extensionRootPath = this.context.extensionMode === vscode.ExtensionMode.Test
+            ? path.resolve(this.context.extensionPath, '..', '..')  // Go up from out/test to extension root
+            : this.context.extensionPath;
+
+        console.log("PromptPanelProvider: Extension root path:", extensionRootPath);
+        const bundlePath = path.join(extensionRootPath, 'src', 'views', 'prompt-panel', 'build');
+        console.log("PromptPanelProvider: Bundle path:", bundlePath);
+
+        // Verify bundle directory exists
+        if (!fs.existsSync(bundlePath)) {
+            console.error(`Bundle directory not found at path: ${bundlePath}`);
+            throw new Error('Bundle directory not found');
+        }
+
+        console.log("PromptPanelProvider: Creating new webview panel");
         this.panel = vscode.window.createWebviewPanel(
             PromptPanelProvider.viewType,
             'Prompt Pilot',
@@ -74,21 +90,36 @@ export class PromptPanelProvider {
             {
                 enableScripts: true,
                 localResourceRoots: [
-                    vscode.Uri.file(path.join(this.context.extensionPath, 'src', 'views', 'prompt-panel', 'build'))
+                    vscode.Uri.file(bundlePath)
                 ]
             }
         ) as VSCodeWebviewPanel;
 
         // Fix the HTML content setting
-        const html = this._getWebviewContent();
-        console.log("PromptPanelProvider: Setting HTML content");
+        console.log("PromptPanelProvider: Setting webview HTML content");
+        const html = this._getWebviewContent(extensionRootPath);
         this.panel.webview.html = html;
 
         // Set up message handling when panel is created
+        console.log("PromptPanelProvider: Setting up message handlers");
         this.panel.webview.onDidReceiveMessage(
             async message => {
+                console.log("PromptPanelProvider: Received message from webview:", message);
                 try {
                     switch (message.type) {
+                        case 'webviewReady':
+                            console.log("PromptPanelProvider: Webview reported ready");
+                            break;
+                        case 'getSelectedFiles': {
+                            console.log("PromptPanelProvider: Handling getSelectedFiles request");
+                            const files = this.fileTreeProvider.getSelectedFiles();
+                            console.log("PromptPanelProvider: Sending selected files to webview:", files);
+                            this.panel?.webview.postMessage({
+                                type: 'selectedFiles',
+                                files: files
+                            });
+                            break;
+                        }
                         case 'getSettings': {
                             const settings = await this.settingsManager.getGlobalSettings();
                             this.panel?.webview.postMessage({
@@ -102,17 +133,6 @@ export class PromptPanelProvider {
                             await this.settingsManager.setGlobalSetting('openaiApiKey', settings.openaiApiKey);
                             await this.settingsManager.setGlobalSetting('anthropicApiKey', settings.anthropicApiKey);
                             vscode.window.showInformationMessage('Settings saved successfully');
-                            break;
-                        }
-                        case 'getSelectedFiles': {
-                            console.log("=== GET SELECTED FILES MESSAGE RECEIVED ===");
-                            console.log("Current panel state:", this.panel?.state);
-                            const files = this.fileTreeProvider.getSelectedFiles();
-                            console.log("Files returned from getSelectedFiles:", files);
-                            this.panel?.webview.postMessage({
-                                type: 'selectedFiles',
-                                files: files
-                            });
                             break;
                         }
                         case 'toggleFileSelection': {
@@ -139,7 +159,6 @@ export class PromptPanelProvider {
                             }
                             
                             if (settings.anthropicApiKey) {
-                                console.log("GOT API KEY: ", settings.anthropicApiKey);
                                 modelsByProvider.anthropic = await this.fetchAnthropicModels(settings.anthropicApiKey);
                             }
 
@@ -195,9 +214,7 @@ export class PromptPanelProvider {
                             break;
                         }
                         case 'retokenizeFiles': {
-                            console.log("IN RETORKENIZE!!!");
                             const { files, model } = message;
-                            console.log(files, model);
                             const filesWithTokens = await Promise.all(
                                 files.map(async (file: { path: string; isDirectory: boolean }) => ({
                                     ...file,
@@ -249,9 +266,9 @@ export class PromptPanelProvider {
         );
 
         // Add listener for selection changes
+        console.log("PromptPanelProvider: Setting up selection change listener");
         this.fileTreeProvider.onDidChangeSelection(async files => {
-            console.log("=== SELECTION CHANGED ===");
-            console.log("Raw files:", files);
+            console.log("PromptPanelProvider: Selection changed, files:", files);
             
             const filesWithTokens = await Promise.all(
                 files.map(async file => ({
@@ -260,15 +277,13 @@ export class PromptPanelProvider {
                         await this.handleFileContent(file.path, this.selectedModel)
                 }))
             );
-            console.log("Files with tokens:", filesWithTokens);
 
+            console.log("PromptPanelProvider: Sending updated files to webview:", filesWithTokens);
             if (this.panel) {
-                console.log("Saving to panel state");
                 this.panel.state = {
                     ...this.panel.state,
                     selectedFiles: filesWithTokens
                 };
-                console.log("New panel state:", this.panel.state);
             }
 
             this.postMessageToWebview({
@@ -279,16 +294,11 @@ export class PromptPanelProvider {
 
         // Add panel focus listener
         this.panel.onDidChangeViewState(async e => {
-            console.log("=== VIEW STATE CHANGE ===");
-            console.log("Active:", e.webviewPanel.active);
             if (e.webviewPanel.active) {
                 const savedState = this.panel?.state;
-                console.log("Saved state:", savedState);
                 
                 // Add debug for getSelectedFiles call
-                console.log("About to call getSelectedFiles from view state change");
                 const selectedFiles = savedState?.selectedFiles || this.fileTreeProvider.getSelectedFiles();
-                console.log("Selected files after potential getSelectedFiles call:", selectedFiles);
                 
                 const filesWithTokens = await Promise.all(
                     selectedFiles.map(async file => ({
@@ -297,7 +307,6 @@ export class PromptPanelProvider {
                             await this.handleFileContent(file.path, this.selectedModel)
                     }))
                 );
-                console.log("Files with tokens to send:", filesWithTokens);
 
                 this.postMessageToWebview({
                     type: 'selectedFiles',
@@ -315,13 +324,28 @@ export class PromptPanelProvider {
         );
     }
 
-    private _getWebviewContent() {
-        const scriptPathOnDisk = vscode.Uri.file(
-            path.join(this.context.extensionPath, 'src', 'views', 'prompt-panel', 'build', 'bundle.js')
-        );
+    private _getWebviewContent(extensionRootPath: string) {
+        console.log("PromptPanelProvider: Generating webview HTML content");
+        
+        const bundlePath = path.join(extensionRootPath, 'src', 'views', 'prompt-panel', 'build', 'bundle.js');
+        console.log("PromptPanelProvider: Bundle path:", bundlePath);
+
+        // Verify bundle exists
+        try {
+            if (!fs.existsSync(bundlePath)) {
+                console.error(`Bundle not found at path: ${bundlePath}`);
+                throw new Error('Bundle not found');
+            }
+        } catch (error) {
+            console.error('Error checking bundle:', error);
+            throw new Error('Failed to verify bundle existence');
+        }
+
+        const scriptPathOnDisk = vscode.Uri.file(bundlePath);
         const scriptUri = this.panel!.webview.asWebviewUri(scriptPathOnDisk);
-        console.log("WE ARE HERE!");
-        console.log(scriptUri);
+        
+        console.log("PromptPanelProvider: Script URI:", scriptUri.toString());
+
         return `<!DOCTYPE html>
             <html lang="en">
             <head>
@@ -336,6 +360,21 @@ export class PromptPanelProvider {
                     // Acquire API before any React code runs
                     const vscode = acquireVsCodeApi();
                     window._vscodeApi = vscode;
+                    
+                    // Add ready event
+                    window.addEventListener('load', () => {
+                        console.log("Webview: Window loaded, sending ready message");
+                        vscode.postMessage({ type: 'webviewReady' });
+                    });
+
+                    // Add error handler for script loading
+                    window.addEventListener('error', (event) => {
+                        console.error('Script loading error:', event);
+                        vscode.postMessage({ 
+                            type: 'error', 
+                            error: 'Failed to load bundle: ' + event.message 
+                        });
+                    });
                 </script>
                 <script src="${scriptUri}"></script>
             </body>
@@ -359,14 +398,11 @@ export class PromptPanelProvider {
 
     private async fetchAnthropicModels(apiKey: string): Promise<AnthropicType.ModelInfo[]> {
         try {
-            console.log("IN ANTHROPIC FETCH", apiKey);
             const client = new Anthropic({
                 apiKey: apiKey
             });
 
             const response = await client.models.list();
-            console.log("HERE");
-            console.log(response);
             return response.data;
         } catch (error) {
             console.error('Error fetching Anthropic models:', error);
@@ -377,11 +413,8 @@ export class PromptPanelProvider {
     private countTokens(text: string, modelId: string): number | null {
         try {
             const enc = encoding_for_model(modelId as TiktokenModel);
-            console.log("counting tokens....");
             const tokens = enc.encode(text);
-            console.log(tokens);
             const count = tokens.length;
-            console.log("COUNT: ", count);
             enc.free();
             return count;
         } catch (error) {
@@ -391,7 +424,6 @@ export class PromptPanelProvider {
     }
 
     private getTokenizerType(modelId: string): 'openai' | 'anthropic' | null {
-        console.log("getTokenizerType", modelId);
         if (modelId.startsWith('gpt-') || modelId.includes('text-davinci')) {
             return 'openai';
         } else if (modelId.startsWith('claude-')) {
@@ -402,12 +434,9 @@ export class PromptPanelProvider {
 
     private async handleFileContent(path: string, modelId: string): Promise<number | null> {
         try {
-            console.log("CHECKPOITN handleFileContent");
-            console.log(path, modelId);
             const content = await vscode.workspace.fs.readFile(vscode.Uri.file(path));
             const text = new TextDecoder().decode(content);
             const tokenizerType = this.getTokenizerType(modelId);
-            console.log("handleFileContent", tokenizerType);
             if (tokenizerType === 'openai') {
                 return this.countTokens(text, modelId);
             }
@@ -436,10 +465,10 @@ export class PromptPanelProvider {
         try {
             // Read the surface.md prompt
             const promptPath = path.join(this.context.extensionPath, 'src', 'prompts', 'surface.md');
-            const promptTemplate = await fs.readFile(promptPath, 'utf-8');
+            const promptTemplate = await fsPromises.readFile(promptPath, 'utf-8');
             
             // Read the target file
-            const fileContent = await fs.readFile(filePath, 'utf-8');
+            const fileContent = await fsPromises.readFile(filePath, 'utf-8');
             
             // Combine prompt with file content
             const fullPrompt = `${promptTemplate}\n\n<file>${fileContent}</file>`;

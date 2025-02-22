@@ -21,6 +21,7 @@ const FileExplorerBox: React.FC = () => {
   const [initialized, setInitialized] = useState(false);
 
   const handleSelectedFilesUpdate = (files: SelectedPath[]) => {
+    console.log("FileExplorerBox: Updating selected files:", files);
     const newDirectoryMap: DirectoryMap = {};
     const newFileTokens = new Map<string, number | null>();
     
@@ -40,6 +41,7 @@ const FileExplorerBox: React.FC = () => {
       }
     });
 
+    console.log("FileExplorerBox: New directory map:", newDirectoryMap);
     setDirectoryMap(newDirectoryMap);
     setFileTokens(newFileTokens);
     
@@ -53,27 +55,34 @@ const FileExplorerBox: React.FC = () => {
   };
 
   useEffect(() => {
+    console.log("FileExplorerBox: Setting up effect with dependencies:", {
+      initialized,
+      directoryMapSize: Object.keys(directoryMap).length,
+      selectedModel
+    });
+
     const messageHandler = (event: MessageEvent) => {
       const message = event.data;
-      console.log("=== FILEEXPLORERBOX MESSAGE ===", message);
+      console.log("FileExplorerBox: Received message:", message);
       
       if (message.type === 'selectedFiles') {
-        console.log("Handling selectedFiles message:", message.files);
+        console.log("FileExplorerBox: Handling selectedFiles message:", message.files);
         handleSelectedFilesUpdate(message.files);
         setInitialized(true);
       }
     };
 
     window.addEventListener('message', messageHandler);
-    console.log("=== FILEEXPLORERBOX MOUNTED ===");
+    console.log("FileExplorerBox: Added message listener");
     
     // Only request files if we haven't received any yet
     if (!initialized && Object.keys(directoryMap).length === 0) {
+      console.log("FileExplorerBox: Requesting selected files");
       vscodeApi.postMessage({ type: 'getSelectedFiles' });
     }
 
     return () => {
-      console.log("=== FILEEXPLORERBOX UNMOUNTED ===");
+      console.log("FileExplorerBox: Cleaning up effect");
       window.removeEventListener('message', messageHandler);
     };
   }, [vscodeApi, initialized, directoryMap, selectedModel]);

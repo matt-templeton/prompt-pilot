@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 // import * as myExtension from '../../extension';
 import * as path from 'path';
 import { FileTreeProvider, FileTreeItem } from '../providers/file_tree_provider';
+import { setupTestWorkspace, cleanupTestWorkspace } from './test-utils';
 
 interface SelectedPath {
 	path: string;
@@ -13,11 +14,69 @@ interface SelectedPath {
 }
 
 suite('Extension Test Suite', () => {
-	vscode.window.showInformationMessage('Start all tests.');
+	let workspacePath: string;
+
+	suiteSetup(async () => {
+		workspacePath = await setupTestWorkspace();
+	});
+
+	suiteTeardown(async () => {
+		await cleanupTestWorkspace(workspacePath);
+	});
 
 	test('Sample test', () => {
 		assert.strictEqual(-1, [1, 2, 3].indexOf(5));
 		assert.strictEqual(-1, [1, 2, 3].indexOf(0));
+	});
+
+	test('Files created in workspace appear in file explorer', async () => {
+		// Get the test workspace path from the workspace folders
+		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+		assert.ok(workspaceFolder, 'Workspace folder should be available');
+		
+		// Create test files
+		const file1Path = path.join(workspaceFolder.uri.fsPath, 'test-file1.txt');
+		const file2Path = path.join(workspaceFolder.uri.fsPath, 'test-file2.txt');
+		
+		try {
+			// Create the files
+			await vscode.workspace.fs.writeFile(vscode.Uri.file(file1Path), Buffer.from('test content 1'));
+			await vscode.workspace.fs.writeFile(vscode.Uri.file(file2Path), Buffer.from('test content 2'));
+			
+			// Get the FileTreeProvider instance
+			const fileTreeProvider = FileTreeProvider.getInstance();
+			
+			// Wait for file watcher to detect changes and refresh
+			await new Promise(resolve => setTimeout(resolve, 2000));
+			fileTreeProvider.refresh();
+			await new Promise(resolve => setTimeout(resolve, 1000));
+			
+			// Get all files from the provider
+			const files = await fileTreeProvider.getChildren();
+			
+			// Convert files to paths for easier comparison
+			const filePaths = files.map(file => file.resourceUri.fsPath);
+			
+			// Assert both files are present
+			assert.ok(
+				filePaths.some(p => p === file1Path),
+				'test-file1.txt should be present in file explorer'
+			);
+			assert.ok(
+				filePaths.some(p => p === file2Path),
+				'test-file2.txt should be present in file explorer'
+			);
+		} finally {
+			// Clean up test files
+			try {
+				await vscode.workspace.fs.delete(vscode.Uri.file(file1Path));
+				await vscode.workspace.fs.delete(vscode.Uri.file(file2Path));
+				// Wait for file watcher to detect deletions
+				await new Promise(resolve => setTimeout(resolve, 1000));
+			} catch (e) {
+				console.error('Error cleaning up test files:', e);
+			}
+		}
 	});
 });
 
@@ -28,7 +87,7 @@ suite('File Explorer Tests', () => {
 		// Use getInstance instead of new constructor
 		provider = FileTreeProvider.getInstance();
 		
-		// Update to handle SelectedPath type
+		// Clear all selected files
 		provider.getSelectedFiles().forEach((selectedPath: SelectedPath) => {
 			provider.toggleSelection(new FileTreeItem(
 				path.basename(selectedPath.path),
