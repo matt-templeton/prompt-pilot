@@ -1,6 +1,5 @@
 import dotenv from 'dotenv';
 import { DatasetManager } from './dataset';
-import { ApiSurfaceEvaluator } from './evaluator';
 import OpenAI from 'openai';
 import path from 'path';
 import { evaluate } from 'langsmith/evaluation';
@@ -9,6 +8,7 @@ import type { ApiSurface } from './types';
 import { loadPrompt } from './prompt-loader';
 import minimist from 'minimist';
 import { parse as parseYaml } from 'yaml';
+import { createDetailedEvaluation } from './evaluators';
 
 dotenv.config();
 
@@ -40,9 +40,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 function extractStructuredData(content: string): ApiSurface {
   // Try to find YAML between ```yaml and ``` markers
   const yamlMatch = content.match(/```yaml\s*([\s\S]*?)\s*```/);
-  console.log("START");
-  console.log(content);
-  console.log("END");
+
   if (yamlMatch) {
     try {
       const y = parseYaml(yamlMatch[1]);
@@ -86,16 +84,40 @@ function extractStructuredData(content: string): ApiSurface {
  * Function to extract API surface from code
  */
 async function extractApiSurface(input: { content: string; language: string }) {
+  // Construct the prompt with clear separation between example and code to analyze
+  const fullPrompt = `${prompt.user}
+
+NOW, PLEASE ANALYZE THE FOLLOWING CODE:
+\`\`\`${input.language}
+${input.content}
+\`\`\`
+
+Please analyze the code above and provide its API surface in the same format as shown in the example. Do not repeat the example output - analyze the new code provided.`;
+
+  console.log("Sending to OpenAI:");
+  console.log("Language:", input.language);
+  console.log("Code length:", input.content.length);
+  console.log("First 100 chars of code:", input.content.slice(0, 100));
+
+  console.log("SENDING DA WHOLE PROMPTTTTT>....");
+  console.log(fullPrompt);
+  console.log('ok');
+
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
-      { role: "user", content: prompt.user.replace('${language}', input.language).replace('${code}', input.content) }
+      { role: "user", content: fullPrompt }
     ],
     temperature: 0
   });
 
+  const responseContent = response.choices[0].message.content || "{}";
+  console.log("\nReceived from OpenAI:");
+  console.log("Response length:", responseContent.length);
+  console.log("First 100 chars of response:", responseContent.slice(0, 100));
+
   return {
-    result: extractStructuredData(response.choices[0].message.content || "{}")
+    result: extractStructuredData(responseContent)
   };
 }
 
@@ -109,18 +131,7 @@ async function apiSurfaceAccuracy({
   outputs?: Record<string, unknown>;
   referenceOutputs?: Record<string, unknown>;
 }): Promise<EvaluationResult> {
-  const evaluator = new ApiSurfaceEvaluator(process.env.OPENAI_API_KEY!, []);
-  
-  const extractedSurface = (outputs?.result || { classes: [], functions: [] }) as ApiSurface;
-  const expectedSurface = (referenceOutputs?.expected || { classes: [], functions: [] }) as ApiSurface;
-  
-  const accuracy = evaluator.computeAccuracy(extractedSurface, expectedSurface);
-
-  return {
-    key: "api_surface_accuracy",
-    score: accuracy.structural,
-    comment: JSON.stringify(accuracy.content)
-  };
+  return createDetailedEvaluation(outputs, referenceOutputs, openai);
 }
 
 async function main() {
