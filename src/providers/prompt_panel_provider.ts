@@ -6,6 +6,8 @@ import OpenAI from 'openai';
 import { Anthropic } from '@anthropic-ai/sdk';
 import type { Anthropic as AnthropicType } from '@anthropic-ai/sdk';
 import { encoding_for_model, TiktokenModel } from "tiktoken";
+import * as fs from 'fs/promises';
+import { StorageManager } from '../services/StorageManager';
 
 interface OpenAIModel {
   id: string;
@@ -42,12 +44,14 @@ export class PromptPanelProvider {
     private panel: VSCodeWebviewPanel | undefined;
     private settingsManager: SettingsManager;
     private selectedModel = '';
+    private storageManager: StorageManager;
 
     constructor(
         private readonly context: vscode.ExtensionContext,
         private readonly fileTreeProvider: FileTreeProvider
     ) {
         this.settingsManager = new SettingsManager(context);
+        this.storageManager = StorageManager.getInstance(context);
     }
 
     public showPanel() {
@@ -83,7 +87,6 @@ export class PromptPanelProvider {
         // Set up message handling when panel is created
         this.panel.webview.onDidReceiveMessage(
             async message => {
-                console.log('PromptPanelProvider: Received message:', message);
                 try {
                     switch (message.type) {
                         case 'getSettings': {
@@ -207,6 +210,32 @@ export class PromptPanelProvider {
                                 type: 'selectedFiles',
                                 files: filesWithTokens
                             });
+                            break;
+                        }
+                        case 'extractApiSurface': {
+                            await this.extractApiSurface(message.path);
+                            break;
+                        }
+                        case 'checkApiSurface': {
+                            const surface = await this.storageManager.getApiSurface(message.path);
+                            if (surface) {
+                                const enc = encoding_for_model('gpt-4');
+                                const tokens = enc.encode(JSON.stringify(surface)).length;
+                                enc.free();
+                                
+                                this.panel?.webview.postMessage({
+                                    type: 'apiSurfaceStatus',
+                                    path: message.path,
+                                    exists: true,
+                                    tokens
+                                });
+                            } else {
+                                this.panel?.webview.postMessage({
+                                    type: 'apiSurfaceStatus',
+                                    path: message.path,
+                                    exists: false
+                                });
+                            }
                             break;
                         }
                     }
@@ -401,5 +430,80 @@ export class PromptPanelProvider {
             return modelsByProvider.openai[0].id;
         }
         return '';
+    }
+
+    private async extractApiSurface(filePath: string): Promise<void> {
+        try {
+            // Read the surface.md prompt
+            const promptPath = path.join(this.context.extensionPath, 'src', 'prompts', 'surface.md');
+            const promptTemplate = await fs.readFile(promptPath, 'utf-8');
+            
+            // Read the target file
+            const fileContent = await fs.readFile(filePath, 'utf-8');
+            
+            // Combine prompt with file content
+            const fullPrompt = `${promptTemplate}\n\n<file>${fileContent}</file>`;
+            
+            // Get API key from settings
+            // const config = vscode.workspace.getConfiguration('promptPilot');
+            // const apiKey = config.get<string>('openaiApiKey');
+            const settings = await this.settingsManager.getGlobalSettings();
+            
+            if (!settings.openaiApiKey) {
+                throw new Error('OpenAI API key not configured');
+            }
+
+            // Create OpenAI client
+            const openai = new OpenAI({ apiKey: settings.openaiApiKey });
+            
+            // Make the extraction request
+            const response = await openai.chat.completions.create({
+                model: 'gpt-3.5-turbo',
+                messages: [
+                    { 
+                        role: 'user', 
+                        content: fullPrompt
+                    }
+                ],
+                temperature: 0,
+            });
+
+            // Parse the response
+            if (!response.choices[0].message.content) {
+                throw new Error('No content in API response');
+            }
+            const apiSurface = JSON.parse(response.choices[0].message.content.replace('```json', '').replace('```', ''));
+            
+            // Save to storage
+            await this.storageManager.saveApiSurface(filePath, apiSurface);
+            
+            // Calculate tokens for the surface using selected model
+            const tokenizerType = this.getTokenizerType(this.selectedModel);
+            let surfaceTokens: number | null = null;
+            
+            if (tokenizerType === 'openai') {
+                const enc = encoding_for_model(this.selectedModel as TiktokenModel);
+                surfaceTokens = enc.encode(JSON.stringify(apiSurface)).length;
+                enc.free();
+            }
+
+            // Send status back to webview
+            this.panel?.webview.postMessage({
+                type: 'apiSurfaceStatus',
+                path: filePath,
+                exists: true,
+                tokens: surfaceTokens
+            });
+
+        } catch (error) {
+            console.error('Error extracting API surface:', error);
+            // Notify webview of failure
+            this.panel?.webview.postMessage({
+                type: 'apiSurfaceStatus',
+                path: filePath,
+                exists: false,
+                error: 'Failed to extract API surface'
+            });
+        }
     }
 } 

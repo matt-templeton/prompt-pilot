@@ -1,5 +1,5 @@
 import React from 'react';
-import { Chip, Box, Typography, Tooltip, IconButton, Checkbox } from '@mui/material';
+import { Chip, Box, Typography, Tooltip, IconButton, Checkbox, CircularProgress } from '@mui/material';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import ExtractIcon from '@mui/icons-material/AccountTree'; // This icon suggests structure/extraction
 import { useVSCode } from '../contexts/VSCodeContext';
@@ -14,6 +14,7 @@ interface ApiSurfaceState {
   exists: boolean;
   useApiSurface: boolean;
   apiSurfaceTokens: number | null;
+  isExtracting: boolean;
 }
 
 const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
@@ -21,7 +22,8 @@ const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
   const [apiSurface, setApiSurface] = React.useState<ApiSurfaceState>({
     exists: false,
     useApiSurface: false,
-    apiSurfaceTokens: null
+    apiSurfaceTokens: null,
+    isExtracting: false
   });
   
   // Check if API surface exists on mount
@@ -40,7 +42,8 @@ const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
         setApiSurface(prev => ({
           ...prev,
           exists: message.exists,
-          apiSurfaceTokens: message.tokens || null
+          apiSurfaceTokens: message.tokens || null,
+          isExtracting: false
         }));
       }
     };
@@ -50,6 +53,7 @@ const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
   }, [path]);
 
   const handleExtractClick = () => {
+    setApiSurface(prev => ({ ...prev, isExtracting: true }));
     vscode.postMessage({
       type: 'extractApiSurface',
       path
@@ -113,17 +117,21 @@ const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
             >
               {filename}
             </Typography>
-            <Tooltip title="Extract API Surface">
-              <IconButton 
-                size="small" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleExtractClick();
-                }}
-              >
-                <ExtractIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Tooltip>
+            {apiSurface.isExtracting ? (
+              <CircularProgress size={16} />
+            ) : (
+              <Tooltip title="Extract API Surface">
+                <IconButton 
+                  size="small" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleExtractClick();
+                  }}
+                >
+                  <ExtractIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            )}
           </Box>
           <Typography 
             variant="caption" 
