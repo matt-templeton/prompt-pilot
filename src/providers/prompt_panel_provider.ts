@@ -53,6 +53,32 @@ export class PromptPanelProvider {
     ) {
         this.settingsManager = new SettingsManager(context);
         this.storageManager = StorageManager.getInstance(context);
+
+        // Add logging for selection changes
+        this.fileTreeProvider.onDidChangeSelection(async files => {
+            console.log('PromptPanelProvider: Received selection change:', files);
+            
+            const filesWithTokens = await Promise.all(
+                files.map(async file => ({
+                    ...file,
+                    tokenCount: file.isDirectory ? null :
+                        await this.handleFileContent(file.path, this.selectedModel)
+                }))
+            );
+
+            console.log('PromptPanelProvider: Sending files to webview:', filesWithTokens);
+            if (this.panel) {
+                this.panel.state = {
+                    ...this.panel.state,
+                    selectedFiles: filesWithTokens
+                };
+            }
+
+            this.postMessageToWebview({
+                type: 'selectedFiles',
+                files: filesWithTokens
+            });
+        });
     }
 
     public showPanel() {
@@ -174,19 +200,22 @@ export class PromptPanelProvider {
                             break;
                         }
                         case 'selectedFiles': {
-                            // Handle selection updates with tokenization
-                            const filesWithTokens = await Promise.all(
-                                message.files.map(async (file: { path: string; isDirectory: boolean }) => ({
-                                    ...file,
-                                    tokenCount: file.isDirectory ? null :
-                                        await this.handleFileContent(file.path, this.selectedModel)
-                                }))
-                            );
-                            
-                            this.panel?.webview.postMessage({
-                                type: 'selectedFiles',
-                                files: filesWithTokens
-                            });
+                            // Only process if this is a request to update selected files
+                            if (message.action === 'update') {
+                                // Handle selection updates with tokenization
+                                const filesWithTokens = await Promise.all(
+                                    message.files.map(async (file: { path: string; isDirectory: boolean }) => ({
+                                        ...file,
+                                        tokenCount: file.isDirectory ? null :
+                                            await this.handleFileContent(file.path, this.selectedModel)
+                                    }))
+                                );
+
+                                this.postMessageToWebview({
+                                    type: 'selectedFiles',
+                                    files: filesWithTokens
+                                });
+                            }
                             break;
                         }
                         case 'getFileContent': {
@@ -264,33 +293,6 @@ export class PromptPanelProvider {
             undefined,
             this.context.subscriptions
         );
-
-        // Add listener for selection changes
-        console.log("PromptPanelProvider: Setting up selection change listener");
-        this.fileTreeProvider.onDidChangeSelection(async files => {
-            console.log("PromptPanelProvider: Selection changed, files:", files);
-            
-            const filesWithTokens = await Promise.all(
-                files.map(async file => ({
-                    ...file,
-                    tokenCount: file.isDirectory ? null :
-                        await this.handleFileContent(file.path, this.selectedModel)
-                }))
-            );
-
-            console.log("PromptPanelProvider: Sending updated files to webview:", filesWithTokens);
-            if (this.panel) {
-                this.panel.state = {
-                    ...this.panel.state,
-                    selectedFiles: filesWithTokens
-                };
-            }
-
-            this.postMessageToWebview({
-                type: 'selectedFiles',
-                files: filesWithTokens
-            });
-        });
 
         // Add panel focus listener
         this.panel.onDidChangeViewState(async e => {
@@ -448,6 +450,7 @@ export class PromptPanelProvider {
     }
 
     public postMessageToWebview(message: WebviewMessage) {
+        console.log('PromptPanelProvider: Posting message to webview:', message);
         this.panel?.webview.postMessage(message);
     }
 

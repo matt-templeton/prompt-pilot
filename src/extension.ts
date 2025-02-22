@@ -101,15 +101,52 @@ export async function activate(context: vscode.ExtensionContext) {
 	const toggleCommand = vscode.commands.registerCommand(
 		'promptPilot.toggleSelection', 
 		async (fsPath: string) => {
+			console.log('Toggle command: Called with path:', fsPath);
 			const uri = vscode.Uri.file(fsPath);
-			const item = new FileTreeItem(
-				path.basename(fsPath),
-				fs.statSync(fsPath).isDirectory() 
-					? vscode.TreeItemCollapsibleState.Collapsed 
-					: vscode.TreeItemCollapsibleState.None,
-				uri
-			);
-			await fileExplorer.fileTreeProvider.toggleSelection(item);
+			
+			// Get all items from the tree
+			const rootItems = await fileExplorer.fileTreeProvider.getChildren();
+			console.log('Toggle command: All root items:', rootItems.map(i => ({ 
+				label: i.label, 
+				checked: i.checkboxState === vscode.TreeItemCheckboxState.Checked 
+			})));
+
+			const item = rootItems.find(i => i.resourceUri.fsPath === fsPath);
+			
+			if (item) {
+				console.log('Toggle command: Found existing item:', {
+					label: item.label,
+					checked: item.checkboxState === vscode.TreeItemCheckboxState.Checked
+				});
+				// Update the item's checkbox state
+				item.updateCheckboxState(!item.isChecked);
+				console.log('Toggle command: Updated checkbox state:', {
+					label: item.label,
+					checked: item.checkboxState === vscode.TreeItemCheckboxState.Checked
+				});
+				
+				// Toggle selection in the provider
+				await fileExplorer.fileTreeProvider.toggleSelection(item);
+
+				// Log TreeView state after toggle
+				console.log('Toggle command: TreeView selection:', fileExplorer.treeView.selection.map(i => i.label));
+				console.log('Toggle command: Selected files after toggle:', 
+					(await fileExplorer.fileTreeProvider.getChildren())
+						.filter(i => i.checkboxState === vscode.TreeItemCheckboxState.Checked)
+						.map(i => i.label)
+				);
+			} else {
+				console.log('Creating new item for:', fsPath);
+				// If not found at root, create a new item
+				const newItem = new FileTreeItem(
+					path.basename(fsPath),
+					fs.statSync(fsPath).isDirectory() 
+						? vscode.TreeItemCollapsibleState.Collapsed 
+						: vscode.TreeItemCollapsibleState.None,
+					uri
+				);
+				await fileExplorer.fileTreeProvider.toggleSelection(newItem);
+			}
 		}
 	);
 

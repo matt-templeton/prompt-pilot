@@ -1,4 +1,4 @@
-import React, { useEffect, useState, memo } from 'react';
+import React, { useEffect, useState, memo, useRef } from 'react';
 import { Box, Paper, Typography } from '@mui/material';
 import Directory from './Directory';
 import { useVSCode } from '../contexts/VSCodeContext';
@@ -18,28 +18,37 @@ const FileExplorerBox: React.FC = () => {
   const [directoryMap, setDirectoryMap] = useState<DirectoryMap>({});
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [fileTokens, setFileTokens] = useState<Map<string, number | null>>(new Map());
-  const [initialized, setInitialized] = useState(false);
+  const hasRequestedFiles = useRef(false);
+  const currentFiles = useRef<SelectedPath[]>([]);
 
   const handleSelectedFilesUpdate = (files: SelectedPath[]) => {
-    console.log("FileExplorerBox: Updating selected files:", files);
+    console.log("FileExplorerBox: Starting files update with:", files);
+
+    // Store current files for retokenization
+    currentFiles.current = files;
+
+    // Always process the update, even if files is empty
     const newDirectoryMap: DirectoryMap = {};
     const newFileTokens = new Map<string, number | null>();
     
-    files.forEach(({path, tokenCount}) => {
-      const pathParts = path.split(/[/\\]/);
-      pathParts.pop();
-      const dirPath = pathParts.join('/') || '.';
-      
-      if (!newDirectoryMap[dirPath]) {
-        newDirectoryMap[dirPath] = [];
-      }
-      newDirectoryMap[dirPath].push(path);
-      
-      // Store token count if provided
-      if (tokenCount !== undefined) {
-        newFileTokens.set(path, tokenCount);
-      }
-    });
+    if (files && files.length > 0) {
+      files.forEach(({path, tokenCount}) => {
+        console.log("FileExplorerBox: Processing file:", path);
+        const pathParts = path.split(/[/\\]/);
+        pathParts.pop();
+        const dirPath = pathParts.join('/') || '.';
+        
+        if (!newDirectoryMap[dirPath]) {
+          newDirectoryMap[dirPath] = [];
+        }
+        newDirectoryMap[dirPath].push(path);
+        
+        // Store token count if provided
+        if (tokenCount !== undefined) {
+          newFileTokens.set(path, tokenCount);
+        }
+      });
+    }
 
     console.log("FileExplorerBox: New directory map:", newDirectoryMap);
     setDirectoryMap(newDirectoryMap);
@@ -47,6 +56,7 @@ const FileExplorerBox: React.FC = () => {
     
     // Update expanded dirs
     const newDirs = Object.keys(newDirectoryMap);
+    console.log("FileExplorerBox: Updating expanded directories:", newDirs);
     setExpandedDirs(prev => {
       const next = new Set(prev);
       newDirs.forEach(dir => next.add(dir));
@@ -54,38 +64,51 @@ const FileExplorerBox: React.FC = () => {
     });
   };
 
+  // Handle file selection messages
   useEffect(() => {
-    console.log("FileExplorerBox: Setting up effect with dependencies:", {
-      initialized,
-      directoryMapSize: Object.keys(directoryMap).length,
-      selectedModel
-    });
+    console.log("FileExplorerBox: Setting up message handler");
 
     const messageHandler = (event: MessageEvent) => {
+      console.log("FileExplorerBox: Raw message event:", event);
       const message = event.data;
-      console.log("FileExplorerBox: Received message:", message);
+      console.log("FileExplorerBox: Parsed message:", message);
       
       if (message.type === 'selectedFiles') {
         console.log("FileExplorerBox: Handling selectedFiles message:", message.files);
         handleSelectedFilesUpdate(message.files);
-        setInitialized(true);
       }
     };
 
     window.addEventListener('message', messageHandler);
-    console.log("FileExplorerBox: Added message listener");
     
-    // Only request files if we haven't received any yet
-    if (!initialized && Object.keys(directoryMap).length === 0) {
-      console.log("FileExplorerBox: Requesting selected files");
-      vscodeApi.postMessage({ type: 'getSelectedFiles' });
+    // Only request files once on mount
+    if (!hasRequestedFiles.current) {
+      console.log("FileExplorerBox: Making initial files request");
+      vscodeApi.postMessage({ 
+          type: 'getSelectedFiles',
+          action: 'get'
+      });
+      hasRequestedFiles.current = true;
     }
 
     return () => {
-      console.log("FileExplorerBox: Cleaning up effect");
       window.removeEventListener('message', messageHandler);
     };
-  }, [vscodeApi, initialized, directoryMap, selectedModel]);
+  }, [vscodeApi]);
+
+  // Handle model changes
+  useEffect(() => {
+    console.log("FileExplorerBox: Model changed to:", selectedModel);
+    if (selectedModel && currentFiles.current.length > 0) {
+        console.log("FileExplorerBox: Requesting retokenization for files:", currentFiles.current);
+        vscodeApi.postMessage({
+            type: 'selectedFiles',
+            action: 'update',
+            files: currentFiles.current,
+            model: selectedModel
+        });
+    }
+  }, [selectedModel, vscodeApi]);
 
   const handleFileDelete = (fileToDelete: string) => {
     vscodeApi.postMessage({
@@ -138,8 +161,4 @@ const FileExplorerBox: React.FC = () => {
 };
 
 // Export memoized version
-export default memo(FileExplorerBox, (prevProps, nextProps) => {
-  // Since we currently have no props, return true to only update on state changes
-  console.log(prevProps, nextProps);
-  return true;
-}); 
+export default memo(FileExplorerBox); 

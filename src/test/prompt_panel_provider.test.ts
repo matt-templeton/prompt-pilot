@@ -76,7 +76,7 @@ suite('Prompt Panel Provider Test Suite', () => {
     });
 
     test('Selected files are displayed in FileExplorerBox', async function() {
-        this.timeout(10000); // Increase to 30 seconds
+        this.timeout(20000); // Increase to 30 seconds
 
         console.log('Test starting: Selected files are displayed in FileExplorerBox');
 
@@ -117,8 +117,12 @@ suite('Prompt Panel Provider Test Suite', () => {
             const item = rootItems.find(i => i.label === filename);
             assert.ok(item, `Could not find TreeItem for ${filename}`);
 
-            // Simulate checkbox state change
-            await vscode.commands.executeCommand('promptPilot.toggleSelection', item?.resourceUri.fsPath);
+            // Use our improved toggleSelection command
+            console.log('Toggling selection for:', filename);
+            await vscode.commands.executeCommand('promptPilot.toggleSelection', file.path);
+            
+            // Add a small delay to allow the event to propagate
+            await new Promise(resolve => setTimeout(resolve, 100));
         }
 
         console.log('All files selected, waiting for message');

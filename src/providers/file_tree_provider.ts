@@ -92,12 +92,15 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
 
     // Update toggle selection method
     async toggleSelection(item: FileTreeItem): Promise<void> {
+        console.log('FileTreeProvider: Starting toggle selection for:', item.label);
+        console.log('FileTreeProvider: Before toggle - selected files:', Array.from(this.selectedFiles));
         const path = item.resourceUri.fsPath;
         const isDirectory = fs.statSync(path).isDirectory();
 
         if (this.selectedFiles.has(path)) {
             // If unselecting a directory, remove all its files too
             if (isDirectory) {
+                console.log('FileTreeProvider: Unselecting directory and its contents:', path);
                 const allFiles = await this.getAllFilesInDirectory(path);
                 allFiles.forEach(file => this.selectedFiles.delete(file));
             }
@@ -106,12 +109,16 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
         } else {
             // If selecting a directory, add all its files too
             if (isDirectory) {
+                console.log('FileTreeProvider: Selecting directory and its contents:', path);
                 const allFiles = await this.getAllFilesInDirectory(path);
                 allFiles.forEach(file => this.selectedFiles.add(file));
             }
             this.selectedFiles.add(path);
             item.updateCheckboxState(true);
         }
+
+        console.log('FileTreeProvider: After toggle - selected files:', Array.from(this.selectedFiles));
+        console.log('FileTreeProvider: Item checkbox state:', item.checkboxState);
 
         this._onDidChangeTreeData.fire();
         this._onDidChangeSelection.fire(this.getSelectedFiles());
