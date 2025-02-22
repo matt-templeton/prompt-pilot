@@ -467,7 +467,7 @@ export class PromptPanelProvider {
     private async extractApiSurface(filePath: string): Promise<void> {
         try {
             // Read the surface.md prompt
-            const promptPath = path.join(this.context.extensionPath, 'src', 'prompts', 'surface.md');
+            const promptPath = path.join(this.context.extensionPath, 'llm', 'prompts', 'surface.md');
             const promptTemplate = await fsPromises.readFile(promptPath, 'utf-8');
             
             // Read the target file
