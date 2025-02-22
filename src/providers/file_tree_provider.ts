@@ -337,15 +337,12 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
 
     // Modify getSelectedFiles to include directory information
     public getSelectedFiles(): { path: string; isDirectory: boolean }[] {
-        console.log("=== GET SELECTED FILES CALLED ===");
-        console.log("Stack trace:", new Error().stack);
         const selectedFiles = Array.from(this.selectedFiles.entries())
             .filter(([_, isSelected]) => isSelected)
             .map(([path]) => ({
                 path,
                 isDirectory: fs.statSync(path).isDirectory()
             }));
-        console.log("Currently selected files:", selectedFiles);
         return selectedFiles;
     }
 

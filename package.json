@@ -68,7 +68,7 @@
 		"compile": "tsc -p ./",
 		"lint": "eslint",
 		"watch": "tsc -watch -p ./",
-		"test": "vscode-test",
+		"test": "npm run compile && vscode-test",
 		"test-watch": "npm run compile && node ./node_modules/@vscode/test-electron/out/runTest.js --watch"
 	},
 	"devDependencies": {
