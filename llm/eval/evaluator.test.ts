@@ -1,5 +1,5 @@
-import { ApiSurfaceEvaluator } from './evaluator';
-import { TestFile, ApiSurface } from './types';
+import { ApiSurfaceEvaluator } from './src/evaluator';
+import { TestFile, ApiSurface } from './src/types';
 import { describe, expect, it, jest, beforeEach } from '@jest/globals';
 
 describe('ApiSurfaceEvaluator', () => {

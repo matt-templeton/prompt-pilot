@@ -12,12 +12,45 @@ import {
   FunctionDefinition,
   ArgumentDefinition
 } from './types';
+import { OpenAI } from 'openai';
 
 export class ApiSurfaceEvaluator {
-  constructor(
-    private goldenDataset: TestFile[],
-    private extractApiSurface: (content: string) => Promise<ApiSurface>
-  ) {}
+  private openai: OpenAI;
+  private goldenDataset: TestFile[];
+  private extractApiSurface: (content: string) => Promise<ApiSurface>;
+
+  constructor(openaiApiKey: string, goldenDataset: TestFile[]) {
+    this.openai = new OpenAI({ apiKey: openaiApiKey });
+    this.goldenDataset = goldenDataset;
+    this.extractApiSurface = async (content: string) => {
+      const systemPrompt = `
+        You are an expert code analyzer. Extract the API surface from the provided code.
+        Include all classes, methods, properties, and standalone functions.
+        Preserve type information and documentation comments.
+        Return ONLY a JSON object with the following structure:
+        {
+          "classes": [...],
+          "functions": [...]
+        }
+      `;
+
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: content }
+        ],
+        temperature: 0 // Add this for more consistent JSON output
+      });
+
+      try {
+        return JSON.parse(response.choices[0].message.content || "{}");
+      } catch (error) {
+        console.error("Failed to parse OpenAI response as JSON:", error);
+        return { classes: [], functions: [] };
+      }
+    };
+  }
 
   /**
    * Evaluates the API surface extraction on the entire dataset
@@ -52,7 +85,7 @@ export class ApiSurfaceEvaluator {
       // Calculate metrics
       const accuracy = this.computeAccuracy(extracted, file.expected);
       const robustness = this.testRobustness(extracted, file);
-      const performance = this.measurePerformance(startTime, extracted);
+      const performance = this.measurePerformance(startTime);
 
       return {
         accuracy,
@@ -69,9 +102,6 @@ export class ApiSurfaceEvaluator {
    * Computes accuracy metrics by comparing extracted and expected API surfaces
    */
   private computeAccuracy(extracted: ApiSurface, expected: ApiSurface): AccuracyMetrics {
-    console.log("computeAccuracy: ");
-    console.log(extracted);
-    console.log(expected);
     return {
       structural: this.computeStructuralAccuracy(extracted, expected),
       content: {
@@ -98,8 +128,7 @@ export class ApiSurfaceEvaluator {
   /**
    * Measures performance metrics
    */
-  private measurePerformance(startTime: number, extracted: ApiSurface): PerformanceMetrics {
-    console.log(extracted);
+  private measurePerformance(startTime: number): PerformanceMetrics {
     return {
       processingTime: performance.now() - startTime,
       tokenUsage: {
@@ -115,12 +144,9 @@ export class ApiSurfaceEvaluator {
    * Computes structural accuracy by comparing JSON structures
    */
   private computeStructuralAccuracy(extracted: ApiSurface, expected: ApiSurface): number {
-    console.log("computeStructuralAccuracy");
     const expectedKeys = this.getAllKeys(expected);
     const extractedKeys = this.getAllKeys(extracted);
-    console.log("expectedKeys: ", expectedKeys, "extractedKeys: ", extractedKeys);
     const intersection = expectedKeys.filter(key => extractedKeys.includes(key));
-    console.log("intersection: ", intersection);
     return intersection.length / expectedKeys.length;
   }
 
@@ -589,5 +615,16 @@ export class ApiSurfaceEvaluator {
   private checkGenericsHandling(_surface: ApiSurface): number {
     // Implementation would check for proper generic type extraction
     return 0;
+  }
+
+  async runExperiment(
+    extractionFunction: (input: { content: string; language: string }) => Promise<{ result: ApiSurface }>,
+    _datasetId: string
+  ): Promise<void> {
+    this.extractApiSurface = async (content: string) => {
+      const result = await extractionFunction({ content, language: 'unknown' });
+      return result.result;
+    };
+    await this.evaluateAll();
   }
 } 

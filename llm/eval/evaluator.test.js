@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const evaluator_1 = require("./evaluator");
+const evaluator_1 = require("./src/evaluator");
 const globals_1 = require("@jest/globals");
 (0, globals_1.describe)('ApiSurfaceEvaluator', () => {
     let evaluator;

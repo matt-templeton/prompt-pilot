@@ -16,3 +16,7 @@ src/views/prompt-panel/.env.production.local
 src/views/prompt-panel/npm-debug.log*
 src/views/prompt-panel/yarn-debug.log*
 src/views/prompt-panel/yarn-error.log*
+
+# langchain eval data
+llm/eval/datasets
+llm/eval/dist
