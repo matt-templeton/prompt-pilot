@@ -107,7 +107,11 @@ async function accuracy({
         "reasoning": "<detailed explanation of the score>",
         "missing_elements": ["<list of expected elements that are missing>"],
         "extra_elements": ["<list of extracted elements that shouldn't be there>"]
-        }`;
+        }
+        
+        Rules:
+        1. Names of properties, classes, structs, functions or anything else that is defined as some entity within the file must be an exact string match.
+        `;
 
 
     const response = await openai.chat.completions.create({
