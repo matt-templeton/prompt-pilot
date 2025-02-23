@@ -16,6 +16,20 @@
 				"${workspaceFolder}/out/**/*.js"
 			],
 			"preLaunchTask": "npm: watch"
+		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Debug API Surface Evaluator",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/llm/eval/src/run.ts",
+			"runtimeArgs": ["-r", "ts-node/register"],
+			"args": ["--prompt", "surface_yaml"],
+			"console": "integratedTerminal",
+			"outFiles": ["${workspaceFolder}/llm/eval/dist/**/*.js"],
+			"env": {
+				"TS_NODE_PROJECT": "${workspaceFolder}/llm/eval/tsconfig.json"
+			}
 		}
 	]
 }

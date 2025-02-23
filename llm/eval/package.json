@@ -9,7 +9,7 @@
   "dependencies": {
     "@types/yaml": "^1.9.6",
     "dotenv": "^16.4.1",
-    "langsmith": "^0.1.0",
+    "langchain": "^0.3.19",
     "minimist": "^1.2.8",
     "openai": "^4.26.0",
     "yaml": "^2.7.0",

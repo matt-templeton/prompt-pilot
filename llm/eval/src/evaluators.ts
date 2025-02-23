@@ -1,12 +1,18 @@
 import { OpenAI } from 'openai';
-import type { ApiSurface } from './types';
-import type { EvaluationResult } from 'langsmith/evaluation';
+// import type { ApiSurface } from './types';
 
 interface StructureEvaluation {
   score: number;
   reasoning: string;
   missing_elements: string[];
   extra_elements: string[];
+}
+
+export interface EvaluationResult {
+  score: number;
+  comment: string;
+  type: "score";
+  key?: string;
 }
 
 /**
@@ -46,14 +52,20 @@ Provide your response in the following JSON format:
 }`;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4",
+    model: "gpt-4o-mini",
     messages: [{ role: "user", content: prompt }],
-    temperature: 0,
-    response_format: { type: "json_object" }
+    temperature: 0
   });
 
-  const result = JSON.parse(response.choices[0].message.content || "{}") as StructureEvaluation;
-  return result;
+  // Try to find JSON between ```json and ``` markers
+  const jsonMatch = response.choices[0].message.content?.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+  if (jsonMatch) {
+    const result = JSON.parse(jsonMatch[1]);
+    console.log(result);
+    return result;
+  } else {
+    throw Error("Unable to parse json from eval result.");
+  }
 }
 
 /**
@@ -64,8 +76,37 @@ export async function createDetailedEvaluation(
   referenceOutputs: Record<string, unknown> | undefined,
   openai: OpenAI
 ): Promise<EvaluationResult> {
-  const extractedSurface = (outputs?.result || { classes: [], functions: [] }) as ApiSurface;
-  const expectedSurface = (referenceOutputs?.expected || { classes: [], functions: [] }) as ApiSurface;
+  console.log('createDetailedEvaluation called with:');
+  console.log('outputs type:', outputs ? typeof outputs : 'undefined');
+  console.log('outputs keys:', outputs ? Object.keys(outputs) : []);
+  console.log('referenceOutputs type:', referenceOutputs ? typeof referenceOutputs : 'undefined');
+  console.log('referenceOutputs keys:', referenceOutputs ? Object.keys(referenceOutputs) : []);
+
+  if (!outputs || !referenceOutputs) {
+    console.log('Missing outputs or referenceOutputs, returning error score');
+    return {
+      score: 0,
+      comment: "Missing outputs or reference outputs",
+      type: "score"
+    };
+  }
+
+  // Extract the API surfaces from the outputs
+  const extractedSurface = outputs.result;
+  const expectedSurface = referenceOutputs.result;
+
+  console.log('Extracted surfaces:');
+  console.log('extractedSurface:', extractedSurface ? 'present' : 'missing');
+  console.log('expectedSurface:', expectedSurface ? 'present' : 'missing');
+
+  if (!extractedSurface || !expectedSurface) {
+    console.log('Invalid output format - missing result field');
+    return {
+      score: 0,
+      comment: "Invalid API surface format",
+      type: "score"
+    };
+  }
 
   const evaluation = await evaluateApiSurfaceCompleteness(
     extractedSurface,
@@ -74,12 +115,8 @@ export async function createDetailedEvaluation(
   );
 
   return {
-    key: "api_surface_accuracy",
     score: evaluation.score,
-    comment: JSON.stringify({
-      reasoning: evaluation.reasoning,
-      missing_elements: evaluation.missing_elements,
-      extra_elements: evaluation.extra_elements
-    })
+    comment: evaluation.reasoning,
+    type: "score"
   };
 } 
