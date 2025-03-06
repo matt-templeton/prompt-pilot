@@ -33,8 +33,9 @@ const ComposeTab: React.FC = () => {
   const [currentFileContent, setCurrentFileContent] = useState<{ path: string; content: string } | null>(null);
   const [removedFilePath, setRemovedFilePath] = useState<string | null>(null);
   
-  // Refs to child components
+  // Refs to child components and tracking processed messages
   const instructionsBoxRef = useRef<InstructionsBoxHandle>(null);
+  const processedMessagesRef = useRef<Set<string>>(new Set());
   
   // Check if ref is set after component mounts
   useEffect(() => {
@@ -48,18 +49,31 @@ const ComposeTab: React.FC = () => {
 
     const messageHandler = (event: MessageEvent) => {
       const message = event.data;
+      
+      // Create a unique key for this message to prevent duplicate processing
+      let messageKey = `${message.type}`;
+      if (message.path) {messageKey += `:${message.path}`;}
+      if (message.content) {messageKey += `:${message.content.length}`;}
+      
+      // Skip if we've already processed this exact message
+      if (processedMessagesRef.current.has(messageKey)) {
+        return;
+      }
+      
       console.log("ComposeTab: Message received:", message);
-      console.log("ComposeTab: ", message.type);
+      
       // Handle different message types
       switch (message.type) {
         case 'models':
           setModelsByProvider(message.models);
           setSelectedModel(message.selectedModel);
+          processedMessagesRef.current.add(messageKey);
           break;
           
         case 'selectedFiles':
           console.log("ComposeTab: Received selected files:", message.files);
           setSelectedFiles(message.files);
+          processedMessagesRef.current.add(messageKey);
           break;
           
         case 'fileContent':
@@ -77,6 +91,8 @@ const ComposeTab: React.FC = () => {
           } else {
             console.error("ComposeTab: instructionsBoxRef.current is null, cannot call addFileContent");
           }
+          
+          processedMessagesRef.current.add(messageKey);
           break;
           
         case 'fileRemoved':
@@ -91,6 +107,8 @@ const ComposeTab: React.FC = () => {
           } else {
             console.error("ComposeTab: instructionsBoxRef.current is null, cannot call removeFile");
           }
+          
+          processedMessagesRef.current.add(messageKey);
           break;
           
         default:
@@ -111,6 +129,16 @@ const ComposeTab: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [removedFilePath]);
+
+  // Reset currentFileContent after it's been processed
+  useEffect(() => {
+    if (currentFileContent) {
+      const timer = setTimeout(() => {
+        setCurrentFileContent(null);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [currentFileContent]);
 
   const handleModelChange = (e: SelectChangeEvent<string>) => {
     const modelId = e.target.value;

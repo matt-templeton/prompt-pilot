@@ -1,4 +1,4 @@
-import React, { useState, forwardRef, useImperativeHandle, useEffect } from 'react';
+import React, { useState, forwardRef, useImperativeHandle, useEffect, useRef } from 'react';
 import { Box, Paper, Chip, Menu, MenuItem, TextField, Typography, Button } from '@mui/material';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 
@@ -32,6 +32,11 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     const [instructionsText, setInstructionsText] = useState<string>('');
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [fileContents, setFileContents] = useState<FileContent[]>([]);
+    
+    // Use refs to track processed files and prevent infinite loops
+    const processedFilesRef = useRef<Set<string>>(new Set());
+    const processedRemovalsRef = useRef<Set<string>>(new Set());
+    const lastFileContentRef = useRef<{ path: string; content: string } | null>(null);
 
     const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
       setAnchorEl(event.currentTarget);
@@ -63,18 +68,44 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     // Process fileContent prop when it changes
     useEffect(() => {
       if (fileContent && fileContent.path && fileContent.content) {
+        // Check if we've already processed this exact file content
+        const fileContentKey = `${fileContent.path}:${fileContent.content.length}`;
+        
+        // Skip if we've already processed this exact file content
+        if (processedFilesRef.current.has(fileContentKey)) {
+          console.log('InstructionsBox: Skipping already processed file content:', fileContent.path);
+          return;
+        }
+        
         console.log('InstructionsBox: Processing fileContent prop:', fileContent.path);
+        
+        // Add to processed set
+        processedFilesRef.current.add(fileContentKey);
+        lastFileContentRef.current = fileContent;
+        
+        // Process the file content
         addFileContent(fileContent.path, fileContent.content);
       }
-    }, [fileContent]);
+    }, [fileContent]); // Intentionally omitting addFileContent from deps to prevent loops
 
     // Process removedFilePath prop when it changes
     useEffect(() => {
       if (removedFilePath) {
+        // Skip if we've already processed this removal
+        if (processedRemovalsRef.current.has(removedFilePath)) {
+          console.log('InstructionsBox: Skipping already processed file removal:', removedFilePath);
+          return;
+        }
+        
         console.log('InstructionsBox: Processing removedFilePath prop:', removedFilePath);
+        
+        // Add to processed set
+        processedRemovalsRef.current.add(removedFilePath);
+        
+        // Process the file removal
         removeFile(removedFilePath);
       }
-    }, [removedFilePath]);
+    }, [removedFilePath]); // Intentionally omitting removeFile from deps to prevent loops
 
     // Public method to add file content
     const addFileContent = (path: string, content: string) => {
