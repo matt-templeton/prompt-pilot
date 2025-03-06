@@ -29,6 +29,7 @@ interface WebviewMessage {
         anthropicApiKey?: string;
     };
     files?: {path: string; isDirectory: boolean}[];
+    tokenCount?: number | null;
 }
 
 interface WebviewPanelState {
@@ -386,6 +387,10 @@ export class PromptPanelProvider {
                             }
                             break;
                         }
+                        case 'countInstructionsTokens': {
+                            await this.handleCountInstructionsTokens(message.content, message.model);
+                            break;
+                        }
                     }
                 } catch (error) {
                     console.error('Error handling message:', error);
@@ -563,6 +568,12 @@ export class PromptPanelProvider {
 
     private async countAnthropicTokens(text: string, modelId: string): Promise<number | null> {
         try {
+            // Don't count tokens for empty content
+            if (!text || text.trim().length === 0) {
+                console.log('PromptPanelProvider: Empty content for Anthropic token counting, returning 0');
+                return 0;
+            }
+            
             const settings = await this.settingsManager.getGlobalSettings();
             if (!settings.anthropicApiKey) {
                 console.error('Anthropic API key not found');
@@ -574,16 +585,18 @@ export class PromptPanelProvider {
             });
 
             // Use the messages.countTokens method to count tokens
+            console.log('PromptPanelProvider: Calling Anthropic API to count tokens');
             const response = await client.messages.countTokens({
                 model: modelId,
                 messages: [
                     {
                         role: 'user',
-                        content: text
+                        content: text || "placeholder text to avoid API error"
                     }
                 ]
             });
 
+            console.log(`PromptPanelProvider: Anthropic returned ${response.input_tokens} tokens`);
             return response.input_tokens;
         } catch (error) {
             console.error('Error counting tokens with Anthropic:', error);
@@ -707,5 +720,38 @@ export class PromptPanelProvider {
         } catch (error) {
             console.error('Error reading file content:', error);
         }
+    }
+
+    private async handleCountInstructionsTokens(content: string, modelId: string) {
+        console.log('PromptPanelProvider: Counting tokens for instructions content');
+        console.log(`PromptPanelProvider: Content length: ${content.length}, Model: ${modelId}`);
+        
+        // Don't count tokens for empty content
+        if (!content || content.trim().length === 0) {
+            console.log('PromptPanelProvider: Content is empty, returning 0 tokens');
+            this.postMessageToWebview({
+                type: 'instructionsTokenCount',
+                tokenCount: 0
+            });
+            return;
+        }
+        
+        let tokenCount: number | null = null;
+        
+        const tokenizerType = this.getTokenizerType(modelId);
+        console.log(`PromptPanelProvider: Using tokenizer type: ${tokenizerType}`);
+        
+        if (tokenizerType === 'openai') {
+            tokenCount = this.countTokens(content, modelId);
+        } else if (tokenizerType === 'anthropic') {
+            tokenCount = await this.countAnthropicTokens(content, modelId);
+        }
+        
+        console.log('PromptPanelProvider: Instructions token count:', tokenCount);
+        
+        this.postMessageToWebview({
+            type: 'instructionsTokenCount',
+            tokenCount
+        });
     }
 } 

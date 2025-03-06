@@ -1,7 +1,9 @@
-import React, { useState, forwardRef, useImperativeHandle, useEffect, useRef } from 'react';
-import { Box, Paper, Chip, Menu, MenuItem, Button, InputBase } from '@mui/material';
+import React, { useState, forwardRef, useImperativeHandle, useEffect, useRef, useCallback } from 'react';
+import { Box, Paper, Chip, Menu, MenuItem, Button, InputBase, Typography } from '@mui/material';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import FileContents from './FileContents';
+import { useVSCode } from '../contexts/VSCodeContext';
+import { useModel } from '../contexts/ModelContext';
 
 const DUMMY_PROMPTS = ['Template 1', 'Template 2', 'Custom Prompt'];
 
@@ -32,9 +34,13 @@ interface ContentBlock {
 
 const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
   ({ onAddFileContent, onRemoveFile, fileContent, removedFilePath }, ref) => {
+    const vscode = useVSCode();
+    const { selectedModel } = useModel();
     
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [selectedPrompts, setSelectedPrompts] = useState<string[]>([]);
+    const [totalTokenCount, setTotalTokenCount] = useState<number | null>(null);
+    const [isCountingTokens, setIsCountingTokens] = useState(false);
     
     // Instead of a single text state, we'll use an array of content blocks
     const [contentBlocks, setContentBlocks] = useState<ContentBlock[]>([
@@ -52,9 +58,122 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     const processedFilesRef = useRef<Set<string>>(new Set());
     const processedRemovalsRef = useRef<Set<string>>(new Set());
     const lastFileContentRef = useRef<{ path: string; content: string } | null>(null);
+    const lastTokenCountRequestRef = useRef<string>('');
+    const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
     
     // Ref for the text input elements
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+    
+    // Get the combined text content for token counting
+    const getCombinedContentForTokenCount = () => {
+      return contentBlocks.map(block => {
+        if (block.type === 'text') {
+          return block.content;
+        } else if (block.type === 'file' && block.fileInfo) {
+          return block.fileInfo.content;
+        }
+        return '';
+      }).join('\n');
+    };
+    
+    // Request token count from the extension with debouncing
+    const requestTokenCount = useCallback(() => {
+      console.log("InstructionsBox: requestTokenCount called");
+      
+      if (!selectedModel) {
+        console.log("InstructionsBox: No selected model, skipping token count");
+        return;
+      }
+      
+      const combinedContent = getCombinedContentForTokenCount();
+      console.log(`InstructionsBox: Combined content length: ${combinedContent.length}`);
+      
+      // Create a hash of the content to avoid unnecessary requests
+      const contentHash = `${selectedModel}:${combinedContent.length}:${contentBlocks.length}`;
+      
+      // Skip if we've already requested token count for this content
+      if (contentHash === lastTokenCountRequestRef.current) {
+        console.log("InstructionsBox: Content unchanged, skipping token count request");
+        return;
+      }
+      
+      console.log(`InstructionsBox: Content changed, requesting token count for hash: ${contentHash}`);
+      lastTokenCountRequestRef.current = contentHash;
+      setIsCountingTokens(true);
+      
+      vscode.postMessage({
+        type: 'countInstructionsTokens',
+        content: combinedContent,
+        model: selectedModel
+      });
+    }, [contentBlocks, selectedModel, vscode]);
+    
+    // Debounced token count request - using useRef for the function to avoid dependency issues
+    const debouncedRequestRef = useRef<() => void>(() => {});
+    
+    // Update the debounced request function when dependencies change
+    useEffect(() => {
+      debouncedRequestRef.current = () => {
+        console.log("InstructionsBox: debouncedRequestRef function called");
+        
+        // Clear any existing timer
+        if (debounceTimerRef.current) {
+          console.log("InstructionsBox: Clearing existing debounce timer");
+          clearTimeout(debounceTimerRef.current);
+        }
+        
+        // Set a new timer for 2 seconds
+        console.log("InstructionsBox: Setting new debounce timer for 2 seconds");
+        debounceTimerRef.current = setTimeout(() => {
+          console.log("InstructionsBox: Debounce timer expired, calling requestTokenCount");
+          requestTokenCount();
+        }, 8000);
+      };
+    }, [requestTokenCount]);
+    
+    // Listen for token count response from the extension
+    useEffect(() => {
+      const handleMessage = (event: MessageEvent) => {
+        const message = event.data;
+        
+        if (message.type === 'instructionsTokenCount') {
+          console.log(`InstructionsBox: Received token count: ${message.tokenCount}`);
+          setTotalTokenCount(message.tokenCount);
+          setIsCountingTokens(false);
+        }
+      };
+      
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }, []);
+    
+    // Request token count when content changes (with debounce)
+    useEffect(() => {
+      console.log("InstructionsBox: Content blocks changed, triggering debounced token count");
+      if (selectedModel) {
+        debouncedRequestRef.current();
+      }
+      
+      // Cleanup on unmount
+      return () => {
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+        }
+      };
+    }, [contentBlocks, selectedModel]);
+    
+    // Request token count immediately when model changes
+    useEffect(() => {
+      console.log(`InstructionsBox: Model changed to ${selectedModel}, triggering immediate token count`);
+      if (selectedModel) {
+        // Clear any existing timer
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+        }
+        // Request token count immediately
+        requestTokenCount();
+      }
+    }, [selectedModel, requestTokenCount]);
     
     const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
       setAnchorEl(event.currentTarget);
@@ -215,6 +334,14 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
       if (onAddFileContent) {
         onAddFileContent(path, content);
       }
+      
+      // Trigger immediate token count update
+      if (debounceTimerRef.current) {
+        console.log("InstructionsBox: Clearing debounce timer after file add");
+        clearTimeout(debounceTimerRef.current);
+      }
+      console.log("InstructionsBox: Requesting immediate token count after file add");
+      requestTokenCount();
     };
 
     const removeFile = (path: string) => {
@@ -294,10 +421,19 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
         console.log("InstructionsBox: Calling onRemoveFile callback");
         onRemoveFile(path);
       }
+      
+      // Trigger immediate token count update
+      if (debounceTimerRef.current) {
+        console.log("InstructionsBox: Clearing debounce timer after file removal");
+        clearTimeout(debounceTimerRef.current);
+      }
+      console.log("InstructionsBox: Requesting immediate token count after file removal");
+      requestTokenCount();
     };
     
     // Handle text input change
     const handleTextChange = (index: number, value: string) => {
+      console.log(`InstructionsBox: Text changed at index ${index}`);
       const newBlocks = [...contentBlocks];
       if (newBlocks[index].type === 'text') {
         newBlocks[index].content = value;
@@ -330,7 +466,7 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     };
 
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
         <Box sx={{ mb: 1, display: 'flex', alignItems: 'center' }}>
           <Button
             variant="outlined"
@@ -372,7 +508,8 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
             overflowY: 'auto',
             minHeight: '200px',
             backgroundColor: 'background.paper',
-            cursor: 'text'
+            cursor: 'text',
+            position: 'relative'
           }}
           onClick={() => {
             // When clicking anywhere in the paper, focus the last text input block
@@ -434,6 +571,35 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
               ) : null}
             </React.Fragment>
           ))}
+          
+          {/* Token count display */}
+          <Box 
+            sx={{ 
+              position: 'absolute', 
+              bottom: 8, 
+              right: 12, 
+              display: 'flex', 
+              alignItems: 'center',
+              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              borderRadius: 1,
+              px: 1,
+              py: 0.5
+            }}
+          >
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontFamily: 'monospace'
+              }}
+            >
+              {isCountingTokens 
+                ? 'Counting tokens...' 
+                : totalTokenCount !== null 
+                  ? `${totalTokenCount.toLocaleString()} tokens` 
+                  : ''}
+            </Typography>
+          </Box>
         </Paper>
       </Box>
     );
