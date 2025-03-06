@@ -48,7 +48,6 @@ const ComposeTab: React.FC = () => {
     const messageHandler = (event: MessageEvent) => {
       const message = event.data;
       
-      console.log("ComposeTab: Received message:", message.type, message);
       
       // Create a unique key for this message to prevent duplicate processing
       let messageKey = `${message.type}`;
@@ -66,12 +65,8 @@ const ComposeTab: React.FC = () => {
       }
       if (message.content) {messageKey += `:${message.content.length}`;}
       
-      console.log("ComposeTab: Message key:", messageKey);
-      console.log("ComposeTab: Already processed?", processedMessagesRef.current.has(messageKey));
-      
       // Skip if we've already processed this exact message
       if (processedMessagesRef.current.has(messageKey)) {
-        console.log("ComposeTab: Skipping already processed message:", messageKey);
         return;
       }
       
@@ -79,43 +74,35 @@ const ComposeTab: React.FC = () => {
       // Handle different message types
       switch (message.type) {
         case 'models':
-          console.log("ComposeTab: Processing models message");
           setModelsByProvider(message.models);
           setSelectedModel(message.selectedModel);
           processedMessagesRef.current.add(messageKey);
           break;
           
         case 'selectedFiles':
-          console.log("ComposeTab: Processing selectedFiles message, files:", message.files);
-          console.log("ComposeTab: Token counts in selectedFiles message:", message.files.map((f: SelectedPath) => ({ path: f.path, tokenCount: f.tokenCount })));
           setSelectedFiles(message.files);
           processedMessagesRef.current.add(messageKey);
           break;
           
         case 'fileSelected':
-          console.log("ComposeTab: Processing fileSelected message for:", message.file.path);
           
           // Update the selected files list to include this file
           setSelectedFiles(prev => {
             // Check if this file is already in the list
             const fileIndex = prev.findIndex(f => f.path === message.file.path);
-            console.log("ComposeTab: File index in selectedFiles:", fileIndex);
             
             if (fileIndex >= 0) {
-              console.log("ComposeTab: File already in selectedFiles, updating");
               // Replace the existing file
               const newFiles = [...prev];
               newFiles[fileIndex] = message.file;
               return newFiles;
             } else {
-              console.log("ComposeTab: File not in selectedFiles, adding");
               // Add the new file
               return [...prev, message.file];
             }
           });
           
           // Set current file content for InstructionsBox
-          console.log("ComposeTab: Setting currentFileContent");
           setCurrentFileContent({
             path: message.file.path,
             content: message.content
@@ -124,44 +111,33 @@ const ComposeTab: React.FC = () => {
           // Use the ref approach to add file content
           // This is the only place we should call addFileContent to avoid duplicates
           if (instructionsBoxRef.current) {
-            console.log("ComposeTab: Adding file content via ref");
             instructionsBoxRef.current.addFileContent(message.file.path, message.content);
           } else {
             console.error("ComposeTab: instructionsBoxRef.current is null, cannot call addFileContent");
           }
           
-          console.log("ComposeTab: Adding message to processedMessagesRef:", messageKey);
           processedMessagesRef.current.add(messageKey);
           break;
           
         case 'fileUnselected':
           {
-            console.log("ComposeTab: Processing fileUnselected message for:", message.path);
-            
             // Remove the file from the selected files list
             setSelectedFiles(prev => {
-              console.log("ComposeTab: Current selectedFiles:", prev);
               const fileIndex = prev.findIndex(f => f.path === message.path);
-              console.log("ComposeTab: File index in selectedFiles:", fileIndex);
               
               if (fileIndex >= 0) {
-                console.log("ComposeTab: File found in selectedFiles, removing");
                 const newFiles = prev.filter(f => f.path !== message.path);
-                console.log("ComposeTab: New selectedFiles after removal:", newFiles);
                 return newFiles;
               } else {
-                console.log("ComposeTab: File not found in selectedFiles, no change needed");
                 return prev;
               }
             });
             
             // Set removed file path for InstructionsBox
-            console.log("ComposeTab: Setting removedFilePath to:", message.path);
             setRemovedFilePath(message.path);
             
             // Also try using the ref approach as a backup
             if (instructionsBoxRef.current) {
-              console.log("ComposeTab: Removing file via ref for path:", message.path);
               instructionsBoxRef.current.removeFile(message.path);
             } else {
               console.error("ComposeTab: instructionsBoxRef.current is null, cannot call removeFile");
@@ -169,24 +145,19 @@ const ComposeTab: React.FC = () => {
             
             // Remove the corresponding fileSelected entry from processedMessagesRef
             // so that if the file is selected again, it will be processed
-            console.log("ComposeTab: Looking for fileSelected entries to remove for path:", message.path);
-            
             const keysToRemove: string[] = [];
             processedMessagesRef.current.forEach(key => {
               // Check for both old format (fileSelected:contentLength) and new format (fileSelected:path:contentLength)
               if (key.startsWith(`fileSelected:${message.path}`) || 
                   (key.startsWith('fileSelected:') && key.includes(message.path))) {
-                console.log("ComposeTab: Found key to remove:", key);
                 keysToRemove.push(key);
               }
             });
             
             keysToRemove.forEach(key => {
-              console.log("ComposeTab: Removing key from processedMessagesRef:", key);
               processedMessagesRef.current.delete(key);
             });
             
-            console.log("ComposeTab: Adding fileUnselected message to processedMessagesRef:", messageKey);
             processedMessagesRef.current.add(messageKey);
           }
           break;
@@ -371,7 +342,6 @@ const ComposeTab: React.FC = () => {
         
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Typography variant="body2">
-            Tokens: 0/2000
           </Typography>
           
           <FormControl sx={{ minWidth: 200 }}>

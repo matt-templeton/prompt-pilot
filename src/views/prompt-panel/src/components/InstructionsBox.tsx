@@ -79,26 +79,21 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     
     // Request token count from the extension with debouncing
     const requestTokenCount = useCallback(() => {
-      console.log("InstructionsBox: requestTokenCount called");
       
       if (!selectedModel) {
-        console.log("InstructionsBox: No selected model, skipping token count");
         return;
       }
       
       const combinedContent = getCombinedContentForTokenCount();
-      console.log(`InstructionsBox: Combined content length: ${combinedContent.length}`);
       
       // Create a hash of the content to avoid unnecessary requests
       const contentHash = `${selectedModel}:${combinedContent.length}:${contentBlocks.length}`;
       
       // Skip if we've already requested token count for this content
       if (contentHash === lastTokenCountRequestRef.current) {
-        console.log("InstructionsBox: Content unchanged, skipping token count request");
         return;
       }
       
-      console.log(`InstructionsBox: Content changed, requesting token count for hash: ${contentHash}`);
       lastTokenCountRequestRef.current = contentHash;
       setIsCountingTokens(true);
       
