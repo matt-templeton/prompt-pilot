@@ -129,31 +129,45 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
 
     // Public method to add file content
     const addFileContent = (path: string, content: string) => {
+      console.log("InstructionsBox: addFileContent called for path:", path);
+      
       // Check if we already have this file in our content blocks
       const fileExists = contentBlocks.some(block => 
         block.type === 'file' && block.fileInfo?.path === path
       );
       
+      console.log("InstructionsBox: File already exists in content blocks?", fileExists);
+      
       // If the file already exists in our content blocks, don't add it again
       if (fileExists) {
+        console.log("InstructionsBox: File already exists, not adding again");
         return;
       }
       
       // Create a unique ID for this file content
       const fileId = `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      console.log("InstructionsBox: Generated file ID:", fileId);
       
       // Update file contents array
       setFileContents(prev => {
+        console.log("InstructionsBox: Current fileContents:", prev);
         // Check if this file already exists in our array
         const existingIndex = prev.findIndex(file => file.path === path);
+        console.log("InstructionsBox: Existing file index:", existingIndex);
+        
         if (existingIndex >= 0) {
           // Replace existing file content
+          console.log("InstructionsBox: Replacing existing file content");
           const newContents = [...prev];
           newContents[existingIndex] = { path, content, id: fileId };
+          console.log("InstructionsBox: New fileContents:", newContents);
           return newContents;
         } else {
           // Add new file content
-          return [...prev, { path, content, id: fileId }];
+          console.log("InstructionsBox: Adding new file content");
+          const newContents = [...prev, { path, content, id: fileId }];
+          console.log("InstructionsBox: New fileContents:", newContents);
+          return newContents;
         }
       });
       
@@ -204,16 +218,26 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     };
 
     const removeFile = (path: string) => {
+      console.log("InstructionsBox: removeFile called for path:", path);
+      
       // Remove file from fileContents array
-      setFileContents(prev => prev.filter(file => file.path !== path));
+      setFileContents(prev => {
+        console.log("InstructionsBox: Current fileContents:", prev);
+        const newContents = prev.filter(file => file.path !== path);
+        console.log("InstructionsBox: New fileContents after removal:", newContents);
+        return newContents;
+      });
       
       // Remove the file block from content blocks
+      console.log("InstructionsBox: Current contentBlocks:", contentBlocks);
       const newBlocks = contentBlocks.filter(block => {
         if (block.type === 'file' && block.fileInfo?.path === path) {
+          console.log("InstructionsBox: Removing block for path:", path);
           return false;
         }
         return true;
       });
+      console.log("InstructionsBox: New contentBlocks after removal:", newBlocks);
       
       // If we removed a block, we need to merge adjacent text blocks
       const mergedBlocks: ContentBlock[] = [];
@@ -225,28 +249,34 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
             currentBlock.type === 'text' && 
             newBlocks[i-1].type === 'text') {
           // Merge with previous text block
+          console.log("InstructionsBox: Merging text blocks");
           const prevBlock = mergedBlocks[mergedBlocks.length - 1];
           prevBlock.content += currentBlock.content;
         } else {
           // Add as a new block
+          console.log("InstructionsBox: Adding block to mergedBlocks");
           mergedBlocks.push(currentBlock);
         }
       }
       
       // Ensure we always have at least one text block
       if (mergedBlocks.length === 0) {
+        console.log("InstructionsBox: No blocks left, adding empty text block");
         mergedBlocks.push({ type: 'text', content: '' });
       }
       
+      console.log("InstructionsBox: Final mergedBlocks:", mergedBlocks);
       setContentBlocks(mergedBlocks);
       
       // Adjust active block index if needed
       if (activeBlockIndex >= mergedBlocks.length) {
+        console.log("InstructionsBox: Adjusting activeBlockIndex");
         setActiveBlockIndex(Math.max(0, mergedBlocks.length - 1));
       }
       
       // Call the callback if provided
       if (onRemoveFile) {
+        console.log("InstructionsBox: Calling onRemoveFile callback");
         onRemoveFile(path);
       }
     };

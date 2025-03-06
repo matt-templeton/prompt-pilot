@@ -94,6 +94,9 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
     async toggleSelection(item: FileTreeItem): Promise<void> {
         console.log('FileTreeProvider: Starting toggle selection for:', item.label);
         console.log('FileTreeProvider: Before toggle - selected files:', Array.from(this.selectedFiles));
+        console.log('FileTreeProvider: Item checkbox state before toggle:', item.checkboxState);
+        console.log('FileTreeProvider: Item isChecked before toggle:', item.isChecked);
+        
         const path = item.resourceUri.fsPath;
         const isDirectory = fs.statSync(path).isDirectory();
 
@@ -106,6 +109,7 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
             }
             this.selectedFiles.delete(path);
             item.updateCheckboxState(false);
+            console.log('FileTreeProvider: Removed path from selectedFiles:', path);
         } else {
             // If selecting a directory, add all its files too
             if (isDirectory) {
@@ -115,16 +119,23 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
             }
             this.selectedFiles.add(path);
             item.updateCheckboxState(true);
+            console.log('FileTreeProvider: Added path to selectedFiles:', path);
         }
 
         console.log('FileTreeProvider: After toggle - selected files:', Array.from(this.selectedFiles));
-        console.log('FileTreeProvider: Item checkbox state:', item.checkboxState);
+        console.log('FileTreeProvider: Item checkbox state after toggle:', item.checkboxState);
+        console.log('FileTreeProvider: Item isChecked after toggle:', item.isChecked);
 
         this._onDidChangeTreeData.fire();
-        this._onDidChangeSelection.fire(this.getSelectedFiles());
+        console.log('FileTreeProvider: Fired onDidChangeTreeData event');
+        
+        const selectedFiles = this.getSelectedFiles();
+        console.log('FileTreeProvider: Firing onDidChangeSelection with files:', selectedFiles);
+        this._onDidChangeSelection.fire(selectedFiles);
     }
 
     refresh(): void {
+        console.log('FileTreeProvider: refresh called, firing onDidChangeTreeData event');
         this._onDidChangeTreeData.fire();
     }
 
@@ -235,6 +246,7 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
 
     // Update getChildren to use currentSearchResults
     async getChildren(element?: FileTreeItem): Promise<FileTreeItem[]> {
+        console.log('FileTreeProvider: getChildren called with element:', element?.label);
         try {
             if (!element) {
                 const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -285,54 +297,59 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
     }
 
     private async getFilesInFolder(folderUri: vscode.Uri): Promise<FileTreeItem[]> {
+        console.log('FileTreeProvider: getFilesInFolder called for folder:', folderUri.fsPath);
         try {
-            const files = await vscode.workspace.fs.readDirectory(folderUri);
+            const result: FileTreeItem[] = [];
+            const entries = await vscode.workspace.fs.readDirectory(folderUri);
             
-            // Sort files: directories first, then files, both alphabetically
-            const sortedFiles = files.sort((a, b) => {
-                const [nameA, typeA] = a;
-                const [nameB, typeB] = b;
+            // Sort entries: directories first, then files, both alphabetically
+            entries.sort((a, b) => {
+                const [aName, aType] = a;
+                const [bName, bType] = b;
                 
-                // If one is a directory and the other isn't, directory comes first
-                if (typeA === vscode.FileType.Directory && typeB !== vscode.FileType.Directory) {
-                    return -1;
-                }
-                if (typeA !== vscode.FileType.Directory && typeB === vscode.FileType.Directory) {
-                    return 1;
+                // If types are different, directories come first
+                if (aType !== bType) {
+                    return aType === vscode.FileType.Directory ? -1 : 1;
                 }
                 
-                // If both are the same type, sort alphabetically
-                return nameA.toLowerCase().localeCompare(nameB.toLowerCase());
+                // If types are the same, sort alphabetically
+                return aName.localeCompare(bName);
             });
             
-            // Filter files based on search query
-            const filteredFiles = this.searchQuery 
-                ? sortedFiles.filter(([name]) => 
-                    name.toLowerCase().includes(this.searchQuery.toLowerCase()))
-                : sortedFiles;
-            
-            return filteredFiles.map(([name, type]) => {
-                const resourceUri = vscode.Uri.joinPath(folderUri, name);
-                const collapsibleState = type === vscode.FileType.Directory 
-                    ? vscode.TreeItemCollapsibleState.Collapsed 
-                    : vscode.TreeItemCollapsibleState.None;
+            for (const [name, type] of entries) {
+                // Skip hidden files and directories
+                if (name.startsWith('.')) {
+                    continue;
+                }
                 
+                const uri = vscode.Uri.joinPath(folderUri, name);
+                const isDirectory = type === vscode.FileType.Directory;
+                
+                // Create tree item
                 const item = new FileTreeItem(
                     name,
-                    collapsibleState,
-                    resourceUri,
-                    this.selectedFiles.has(resourceUri.fsPath)
+                    isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
+                    uri,
+                    this.selectedFiles.has(uri.fsPath)
                 );
-
-                // Update the command to only pass the resource URI
+                
+                // Add command to toggle selection
                 item.command = {
                     command: 'promptPilot.toggleSelection',
                     title: 'Toggle Selection',
-                    arguments: [resourceUri.fsPath]
+                    arguments: [uri.fsPath]
                 };
                 
-                return item;
-            });
+                result.push(item);
+            }
+            
+            console.log('FileTreeProvider: Found files in folder:', result.map(item => ({
+                label: item.label,
+                path: item.resourceUri.fsPath,
+                checked: item.checkboxState === vscode.TreeItemCheckboxState.Checked
+            })));
+            
+            return result;
         } catch (error) {
             console.error('Error reading directory:', error);
             return [];
@@ -341,47 +358,89 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
 
     // Modify getSelectedFiles to include directory information
     public getSelectedFiles(): { path: string; isDirectory: boolean }[] {
+        console.log('FileTreeProvider: getSelectedFiles called');
+        console.log('FileTreeProvider: Current selectedFiles set:', Array.from(this.selectedFiles));
+        
         const selectedFiles = Array.from(this.selectedFiles)
             .map(path => ({
                 path,
                 isDirectory: fs.statSync(path).isDirectory()
             }));
+        
+        console.log('FileTreeProvider: Returning selectedFiles:', selectedFiles);
         return selectedFiles;
     }
 
     // Add new method to uncheck item by path
     async uncheckItemByPath(filePath: string): Promise<void> {
+        console.log('FileTreeProvider: uncheckItemByPath called for path:', filePath);
+        console.log('FileTreeProvider: Before uncheck - selected files:', Array.from(this.selectedFiles));
+        
         if (this.selectedFiles.has(filePath)) {
+            console.log('FileTreeProvider: Path found in selectedFiles, removing it');
             this.selectedFiles.delete(filePath);
             
             // Find and update the corresponding TreeItem
+            console.log('FileTreeProvider: Finding TreeItems for path:', filePath);
             const items = await this.findTreeItemByPath(filePath);
-            items.forEach(item => item.updateCheckboxState(false));
+            console.log('FileTreeProvider: Found TreeItems:', items.map(item => ({ 
+                label: item.label, 
+                checked: item.checkboxState === vscode.TreeItemCheckboxState.Checked 
+            })));
             
+            items.forEach(item => {
+                console.log('FileTreeProvider: Updating checkbox state for item:', item.label);
+                item.updateCheckboxState(false);
+                console.log('FileTreeProvider: Item checkbox state after update:', item.checkboxState);
+            });
+            
+            console.log('FileTreeProvider: Firing onDidChangeTreeData event');
             this._onDidChangeTreeData.fire();
-            this._onDidChangeSelection.fire(this.getSelectedFiles());
+            
+            const selectedFiles = this.getSelectedFiles();
+            console.log('FileTreeProvider: After uncheck - selected files:', selectedFiles);
+            console.log('FileTreeProvider: Firing onDidChangeSelection with files:', selectedFiles);
+            this._onDidChangeSelection.fire(selectedFiles);
+        } else {
+            console.log('FileTreeProvider: Path not found in selectedFiles:', filePath);
         }
     }
 
     // Helper method to find TreeItem by path
     private async findTreeItemByPath(targetPath: string): Promise<FileTreeItem[]> {
+        console.log('FileTreeProvider: findTreeItemByPath called for path:', targetPath);
         const items: FileTreeItem[] = [];
         
         // Helper function to search recursively
         const searchInItems = async (parentItem?: FileTreeItem) => {
+            console.log('FileTreeProvider: searchInItems called with parent:', parentItem?.label);
             const children = await this.getChildren(parentItem);
+            console.log('FileTreeProvider: Found children:', children.map(item => ({
+                label: item.label,
+                path: item.resourceUri.fsPath,
+                checked: item.checkboxState === vscode.TreeItemCheckboxState.Checked
+            })));
+            
             for (const item of children) {
+                console.log('FileTreeProvider: Checking item:', item.label, item.resourceUri.fsPath);
                 if (item.resourceUri.fsPath === targetPath) {
+                    console.log('FileTreeProvider: Found matching item:', item.label);
                     items.push(item);
                 }
                 if (item.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed ||
                     item.collapsibleState === vscode.TreeItemCollapsibleState.Expanded) {
+                    console.log('FileTreeProvider: Searching in directory:', item.label);
                     await searchInItems(item);
                 }
             }
         };
 
         await searchInItems();
+        console.log('FileTreeProvider: findTreeItemByPath found items:', items.map(item => ({
+            label: item.label,
+            path: item.resourceUri.fsPath,
+            checked: item.checkboxState === vscode.TreeItemCheckboxState.Checked
+        })));
         return items;
     }
 

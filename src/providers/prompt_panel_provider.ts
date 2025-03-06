@@ -56,21 +56,31 @@ export class PromptPanelProvider {
 
         // Add logging for selection changes
         this.fileTreeProvider.onDidChangeSelection(async files => {
-            console.log('PromptPanelProvider: Received selection change:', files);
+            console.log('PromptPanelProvider: Received selection change event');
+            console.log('PromptPanelProvider: Files in selection change event:', files);
+            console.log('PromptPanelProvider: Number of selected files:', files.length);
+            console.log('PromptPanelProvider: Panel exists?', !!this.panel);
             
             // Process files with token counts
+            console.log('PromptPanelProvider: Processing files with token counts');
             const filesWithTokens = await Promise.all(
-                files.map(async file => ({
-                    ...file,
-                    tokenCount: file.isDirectory ? null :
-                        await this.handleFileContent(file.path, this.selectedModel)
-                }))
+                files.map(async file => {
+                    console.log('PromptPanelProvider: Processing file:', file.path);
+                    const tokenCount = file.isDirectory ? null :
+                        await this.handleFileContent(file.path, this.selectedModel);
+                    console.log('PromptPanelProvider: Token count for file:', file.path, tokenCount);
+                    return {
+                        ...file,
+                        tokenCount
+                    };
+                })
             );
 
             console.log('PromptPanelProvider: Processed files with tokens:', filesWithTokens);
             
             if (this.panel) {
                 // Update panel state
+                console.log('PromptPanelProvider: Updating panel state with files');
                 this.panel.state = {
                     ...this.panel.state,
                     selectedFiles: filesWithTokens
@@ -87,12 +97,14 @@ export class PromptPanelProvider {
                 for (const file of filesWithTokens) {
                     if (!file.isDirectory) {
                         try {
+                            console.log('PromptPanelProvider: Reading content for file:', file.path);
                             // Read file content
                             const content = await vscode.workspace.fs.readFile(vscode.Uri.file(file.path));
                             const text = new TextDecoder().decode(content);
                             
                             // Send a fileSelected message with both file metadata and content
                             console.log('PromptPanelProvider: Sending fileSelected message for:', file.path);
+                            console.log('PromptPanelProvider: Content length:', text.length);
                             this.panel.webview.postMessage({
                                 type: 'fileSelected',
                                 file: file,
@@ -213,8 +225,11 @@ export class PromptPanelProvider {
                             break;
                         }
                         case 'toggleFileSelection': {
+                            console.log('PromptPanelProvider: Received toggleFileSelection message:', message);
+                            
                             if (message.action === 'uncheck') {
                                 // Handle uncheck action
+                                console.log('PromptPanelProvider: Unchecking file:', message.file);
                                 await this.fileTreeProvider.uncheckItemByPath(message.file);
                                 
                                 // Send a single fileUnselected message
@@ -225,6 +240,7 @@ export class PromptPanelProvider {
                                 });
                             } else {
                                 // Handle regular toggle
+                                console.log('PromptPanelProvider: Toggling file selection:', message.file);
                                 vscode.commands.executeCommand('promptRepo.toggleSelection', {
                                     resourceUri: vscode.Uri.file(message.file)
                                 });

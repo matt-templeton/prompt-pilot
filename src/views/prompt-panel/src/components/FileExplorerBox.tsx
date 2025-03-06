@@ -35,49 +35,41 @@ const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({
 
   // Process selected files when they change
   useEffect(() => {
-    handleSelectedFilesUpdate(selectedFiles);
-  }, [selectedFiles]);
-
-  const handleSelectedFilesUpdate = (files: SelectedPath[]) => {
-    console.log("FileExplorerBox: Starting files update with:", files);
-
-    // Store current files for retokenization
-    currentFiles.current = files;
-
-    // Always process the update, even if files is empty
-    const newDirectoryMap: DirectoryMap = {};
-    const newFileTokens = new Map<string, number | null>();
+    console.log("FileExplorerBox: selectedFiles changed:", selectedFiles);
     
-    if (files && files.length > 0) {
-      files.forEach(({path, tokenCount}) => {
-        console.log("FileExplorerBox: Processing file:", path);
-        const pathParts = path.split(/[/\\]/);
-        pathParts.pop();
-        const dirPath = pathParts.join('/') || '.';
-        
-        if (!newDirectoryMap[dirPath]) {
-          newDirectoryMap[dirPath] = [];
-        }
-        newDirectoryMap[dirPath].push(path);
-        
-        // Store token count if provided
-        if (tokenCount !== undefined) {
-          newFileTokens.set(path, tokenCount);
-        }
-      });
-    }
-
-    setDirectoryMap(newDirectoryMap);
-    setFileTokens(newFileTokens);
+    // Update our internal state
+    currentFiles.current = selectedFiles;
     
-    // Update expanded dirs
-    const newDirs = Object.keys(newDirectoryMap);
-    setExpandedDirs(prev => {
-      const next = new Set(prev);
-      newDirs.forEach(dir => next.add(dir));
-      return next;
+    // Process files into directory structure
+    const dirMap: DirectoryMap = {};
+    const tokenCountsMap = new Map<string, number | null>();
+    
+    selectedFiles.forEach(file => {
+      // Extract directory path using string manipulation
+      const pathParts = file.path.split(/[/\\]/);
+      pathParts.pop(); // Remove the filename
+      const dirPath = pathParts.join('/') || '.';
+      
+      if (!dirMap[dirPath]) {
+        dirMap[dirPath] = [];
+      }
+      dirMap[dirPath].push(file.path);
+      
+      // Store token count
+      tokenCountsMap.set(file.path, file.tokenCount || null);
     });
-  };
+    
+    console.log("FileExplorerBox: Processed directory map:", dirMap);
+    console.log("FileExplorerBox: Token counts map:", tokenCountsMap);
+    
+    setDirectoryMap(dirMap);
+    setFileTokens(tokenCountsMap);
+    
+    // Expand directories that have files
+    const dirsToExpand = new Set(Object.keys(dirMap));
+    console.log("FileExplorerBox: Directories to expand:", dirsToExpand);
+    setExpandedDirs(dirsToExpand);
+  }, [selectedFiles]);
 
   // Request files on mount
   useEffect(() => {
@@ -95,10 +87,14 @@ const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({
   }, [selectedModel, onModelChange]);
 
   const handleFileDelete = (fileToDelete: string) => {
+    console.log("FileExplorerBox: handleFileDelete called for:", fileToDelete);
+    
     if (onFileDelete) {
+      console.log("FileExplorerBox: Calling onFileDelete callback");
       onFileDelete(fileToDelete);
     } else {
       // Fallback to direct message if no callback provided
+      console.log("FileExplorerBox: No onFileDelete callback, sending message directly");
       vscodeApi.postMessage({
         type: 'toggleFileSelection',
         action: 'uncheck',

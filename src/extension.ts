@@ -89,7 +89,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 	// Subscribe to selection changes
 	fileTreeProvider.onDidChangeSelection(files => {
-		console.log('Extension: Selection changed:', files);
+		console.log('Extension: Selection changed event triggered');
+		console.log('Extension: Files in selection change event:', files);
+		console.log('Extension: Number of selected files:', files.length);
 	});
 	
 	// Register commands
@@ -102,7 +104,21 @@ export async function activate(context: vscode.ExtensionContext) {
 		'promptPilot.toggleSelection', 
 		async (fsPath: string) => {
 			console.log('Toggle command: Called with path:', fsPath);
-			const uri = vscode.Uri.file(fsPath);
+			console.log('Toggle command: Type of fsPath:', typeof fsPath);
+			
+			let filePath: string = fsPath;
+			
+			// Handle case where fsPath is an object with resourceUri
+			if (typeof fsPath === 'object') {
+				const resourceObj = fsPath as { resourceUri?: { fsPath: string } };
+				if (resourceObj.resourceUri) {
+					console.log('Toggle command: fsPath is an object with resourceUri:', resourceObj.resourceUri);
+					filePath = resourceObj.resourceUri.fsPath;
+				}
+			}
+			
+			const uri = vscode.Uri.file(filePath);
+			console.log('Toggle command: Created URI:', uri.fsPath);
 			
 			// Get all items from the tree
 			const rootItems = await fileExplorer.fileTreeProvider.getChildren();
@@ -111,7 +127,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				checked: i.checkboxState === vscode.TreeItemCheckboxState.Checked 
 			})));
 
-			const item = rootItems.find(i => i.resourceUri.fsPath === fsPath);
+			const item = rootItems.find(i => i.resourceUri.fsPath === filePath);
 			
 			if (item) {
 				console.log('Toggle command: Found existing item:', {
@@ -136,11 +152,11 @@ export async function activate(context: vscode.ExtensionContext) {
 						.map(i => i.label)
 				);
 			} else {
-				console.log('Creating new item for:', fsPath);
+				console.log('Creating new item for:', filePath);
 				// If not found at root, create a new item
 				const newItem = new FileTreeItem(
-					path.basename(fsPath),
-					fs.statSync(fsPath).isDirectory() 
+					path.basename(filePath),
+					fs.statSync(filePath).isDirectory() 
 						? vscode.TreeItemCollapsibleState.Collapsed 
 						: vscode.TreeItemCollapsibleState.None,
 					uri
