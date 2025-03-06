@@ -25,7 +25,7 @@ interface SelectedPath {
 }
 
 const ComposeTab: React.FC = () => {
-  console.log("ComposeTab: Component mounting");
+  console.log("DEBUG: ComposeTab component rendered");
   const vscode = useVSCode();
   const { selectedModel, setSelectedModel } = useModel();
   const [modelsByProvider, setModelsByProvider] = useState<ModelsByProvider>({ openai: [], anthropic: [] });
@@ -49,14 +49,14 @@ const ComposeTab: React.FC = () => {
 
     const messageHandler = (event: MessageEvent) => {
       const message = event.data;
+      console.log("DEBUG: ComposeTab received message:", message.type);
       
-      // Create a unique key for this message to prevent duplicate processing
-      let messageKey = `${message.type}`;
-      if (message.path) {messageKey += `:${message.path}`;}
-      if (message.content) {messageKey += `:${message.content.length}`;}
+      // Create a unique key for this message to avoid processing duplicates
+      const messageKey = `${message.type}-${JSON.stringify(message)}`;
       
       // Skip if we've already processed this exact message
       if (processedMessagesRef.current.has(messageKey)) {
+        console.log("DEBUG: Skipping duplicate message:", message.type);
         return;
       }
       
@@ -71,6 +71,8 @@ const ComposeTab: React.FC = () => {
           break;
           
         case 'selectedFiles':
+          console.log("DEBUG: ComposeTab processing selectedFiles message");
+          console.log("DEBUG: Current selectedFiles state:", selectedFiles);
           console.log("ComposeTab: Received selected files:", message.files);
           setSelectedFiles(message.files);
           processedMessagesRef.current.add(messageKey);
@@ -200,6 +202,8 @@ const ComposeTab: React.FC = () => {
 
   const handleModelChange = (e: SelectChangeEvent<string>) => {
     const modelId = e.target.value;
+    console.log("DEBUG: handleModelChange called with modelId:", modelId);
+    console.log("DEBUG: Previous selectedModel value:", selectedModel);
     setSelectedModel(modelId);
     
     vscode.postMessage({

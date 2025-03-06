@@ -25,8 +25,10 @@ const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({
   onRequestFiles,
   onModelChange
 }) => {
+  console.log("DEBUG: FileExplorerBox component rendered");
   const vscodeApi = useVSCode();
   const { selectedModel } = useModel();
+  console.log("DEBUG: FileExplorerBox got selectedModel:", selectedModel);
   const [directoryMap, setDirectoryMap] = useState<DirectoryMap>({});
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [fileTokens, setFileTokens] = useState<Map<string, number | null>>(new Map());
@@ -35,15 +37,22 @@ const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({
 
   // Process selected files when they change
   useEffect(() => {
+    console.log("DEBUG: FileExplorerBox selectedFiles useEffect triggered");
+    console.log("DEBUG: selectedFiles:", selectedFiles);
     console.log("FileExplorerBox: Processing selected files:", selectedFiles);
     handleSelectedFilesUpdate(selectedFiles);
   }, [selectedFiles]);
 
   const handleSelectedFilesUpdate = (files: SelectedPath[]) => {
+    console.log("DEBUG: handleSelectedFilesUpdate called with files:", files);
+    console.log("DEBUG: Current selectedModel value:", selectedModel);
+    console.log("DEBUG: Current currentFiles.current value:", currentFiles.current);
+    
     console.log("FileExplorerBox: Starting files update with:", files);
 
     // Store current files for retokenization
     currentFiles.current = files;
+    console.log("DEBUG: Updated currentFiles.current to:", currentFiles.current);
 
     // Always process the update, even if files is empty
     const newDirectoryMap: DirectoryMap = {};
@@ -93,6 +102,11 @@ const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({
 
   // Handle model changes
   useEffect(() => {
+    console.log("DEBUG: FileExplorerBox useEffect for model triggered");
+    console.log("DEBUG: selectedModel value:", selectedModel);
+    console.log("DEBUG: selectedModel type:", typeof selectedModel);
+    console.log("DEBUG: currentFiles.current length:", currentFiles.current.length);
+    
     console.log("FileExplorerBox: Model changed to:", selectedModel);
     if (selectedModel && currentFiles.current.length > 0 && onModelChange) {
       console.log("FileExplorerBox: Requesting retokenization for files:", currentFiles.current);

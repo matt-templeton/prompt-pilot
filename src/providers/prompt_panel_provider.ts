@@ -263,11 +263,12 @@ export class PromptPanelProvider {
                             // Only process if this is a request to update selected files
                             if (message.action === 'update') {
                                 // Handle selection updates with tokenization
+                                const modelToUse = message.model || this.selectedModel;
                                 const filesWithTokens = await Promise.all(
                                     message.files.map(async (file: { path: string; isDirectory: boolean }) => ({
                                         ...file,
                                         tokenCount: file.isDirectory ? null :
-                                            await this.handleFileContent(file.path, this.selectedModel)
+                                            await this.handleFileContent(file.path, modelToUse)
                                     }))
                                 );
 
@@ -304,11 +305,12 @@ export class PromptPanelProvider {
                         }
                         case 'retokenizeFiles': {
                             const { files, model } = message;
+                            const modelToUse = model || this.selectedModel;
                             const filesWithTokens = await Promise.all(
                                 files.map(async (file: { path: string; isDirectory: boolean }) => ({
                                     ...file,
                                     tokenCount: file.isDirectory ? null :
-                                        await this.handleFileContent(file.path, model)
+                                        await this.handleFileContent(file.path, modelToUse)
                                 }))
                             );
 
@@ -361,12 +363,13 @@ export class PromptPanelProvider {
                 
                 // Add debug for getSelectedFiles call
                 const selectedFiles = savedState?.selectedFiles || this.fileTreeProvider.getSelectedFiles();
+                const modelToUse = savedState?.selectedModel || this.selectedModel;
                 
                 const filesWithTokens = await Promise.all(
                     selectedFiles.map(async file => ({
                         ...file,
                         tokenCount: file.isDirectory ? null :
-                            await this.handleFileContent(file.path, this.selectedModel)
+                            await this.handleFileContent(file.path, modelToUse)
                     }))
                 );
 
@@ -508,10 +511,42 @@ export class PromptPanelProvider {
             const tokenizerType = this.getTokenizerType(modelId);
             if (tokenizerType === 'openai') {
                 return this.countTokens(text, modelId);
+            } else if (tokenizerType === 'anthropic') {
+                return this.countAnthropicTokens(text, modelId);
             }
             return null;
         } catch (error) {
             console.error('Error reading file:', error);
+            return null;
+        }
+    }
+
+    private async countAnthropicTokens(text: string, modelId: string): Promise<number | null> {
+        try {
+            const settings = await this.settingsManager.getGlobalSettings();
+            if (!settings.anthropicApiKey) {
+                console.error('Anthropic API key not found');
+                return null;
+            }
+
+            const client = new Anthropic({
+                apiKey: settings.anthropicApiKey
+            });
+
+            // Use the messages.countTokens method to count tokens
+            const response = await client.messages.countTokens({
+                model: modelId,
+                messages: [
+                    {
+                        role: 'user',
+                        content: text
+                    }
+                ]
+            });
+
+            return response.input_tokens;
+        } catch (error) {
+            console.error('Error counting tokens with Anthropic:', error);
             return null;
         }
     }
@@ -584,6 +619,8 @@ export class PromptPanelProvider {
                 const enc = encoding_for_model(this.selectedModel as TiktokenModel);
                 surfaceTokens = enc.encode(JSON.stringify(apiSurface)).length;
                 enc.free();
+            } else if (tokenizerType === 'anthropic') {
+                surfaceTokens = await this.countAnthropicTokens(JSON.stringify(apiSurface), this.selectedModel);
             }
 
             // Send status back to webview
