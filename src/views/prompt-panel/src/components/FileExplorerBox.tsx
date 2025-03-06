@@ -10,6 +10,7 @@ interface SelectedPath {
   path: string;
   isDirectory: boolean;
   tokenCount?: number | null;
+  apiSurfaceTokenCount?: number | null;
 }
 
 interface FileExplorerBoxProps {
@@ -32,6 +33,7 @@ const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({
   const [fileTokens, setFileTokens] = useState<Map<string, number | null>>(new Map());
   const hasRequestedFiles = useRef(false);
   const currentFiles = useRef<SelectedPath[]>([]);
+  const processedMessageIds = useRef<Set<string>>(new Set());
 
   // Process selected files when they change
   useEffect(() => {
@@ -85,6 +87,89 @@ const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({
       onModelChange(selectedModel, currentFiles.current);
     }
   }, [selectedModel, onModelChange]);
+
+  // Listen for token count updates and API surface changes
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const message = event.data;
+      
+      // Skip if no message ID or we've already processed this message
+      if (!message.id) {
+        // For messages without IDs, generate one based on content
+        message.id = `${message.type}:${message.path}:${Date.now()}`;
+      }
+      
+      if (processedMessageIds.current.has(message.id)) {
+        return;
+      }
+      
+      // Mark this message as processed
+      processedMessageIds.current.add(message.id);
+      
+      // Limit the size of the processed messages set
+      if (processedMessageIds.current.size > 100) {
+        // Convert to array, remove oldest entries, convert back to set
+        const messagesArray = Array.from(processedMessageIds.current);
+        processedMessageIds.current = new Set(messagesArray.slice(messagesArray.length - 50));
+      }
+      
+      // Handle file token count updates
+      if (message.type === 'fileTokenCount' && message.path) {
+        setFileTokens(prev => {
+          const newMap = new Map(prev);
+          newMap.set(message.path, message.tokenCount);
+          return newMap;
+        });
+      }
+      
+      // Handle API surface status updates
+      else if (message.type === 'apiSurfaceStatus' && message.path) {
+        console.log("FileExplorerBox: Received apiSurfaceStatus for", message.path, message);
+        
+        // Update the selected files with the API surface token count
+        if (message.exists && message.tokens !== undefined) {
+          const updatedFiles = currentFiles.current.map(file => {
+            if (file.path === message.path) {
+              // Store the API surface token count but don't change the main token count yet
+              return {
+                ...file,
+                apiSurfaceTokenCount: message.tokens
+              };
+            }
+            return file;
+          });
+          
+          currentFiles.current = updatedFiles;
+        }
+      }
+      
+      // Handle API surface usage changes
+      else if (message.type === 'apiSurfaceUsageChanged' && message.path) {
+        console.log("FileExplorerBox: Received apiSurfaceUsageChanged for", message.path, message);
+        
+        // Update the token count based on whether to use API surface or full file
+        setFileTokens(prev => {
+          const newMap = new Map(prev);
+          
+          // Find the file in currentFiles to get the appropriate token count
+          const file = currentFiles.current.find(f => f.path === message.path);
+          
+          if (file) {
+            if (message.useApiSurface && file.apiSurfaceTokenCount !== undefined) {
+              newMap.set(message.path, file.apiSurfaceTokenCount);
+            } else {
+              newMap.set(message.path, file.tokenCount ?? null);
+            }
+          }
+          
+          return newMap;
+        });
+      }
+    };
+    
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   const handleFileDelete = (fileToDelete: string) => {
     console.log("FileExplorerBox: handleFileDelete called for:", fileToDelete);

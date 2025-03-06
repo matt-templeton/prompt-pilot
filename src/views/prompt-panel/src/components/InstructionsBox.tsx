@@ -65,6 +65,9 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     // Ref for the text input elements
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
     
+    // Add a state to track token counts for individual files
+    const [fileTokenCounts, setFileTokenCounts] = useState<Map<string, number | null>>(new Map());
+    
     // Get the combined text content for token counting
     const getCombinedContentForTokenCount = () => {
       return contentBlocks.map(block => {
@@ -131,12 +134,28 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
         if (message.type === 'instructionsTokenCount') {
           setTotalTokenCount(message.tokenCount);
           setIsCountingTokens(false);
+        } else if (message.type === 'fileTokenCount' && message.path) {
+          setFileTokenCounts(prev => {
+            const newMap = new Map(prev);
+            newMap.set(message.path, message.tokenCount);
+            return newMap;
+          });
+        } else if (message.type === 'apiSurfaceUsageChanged' && message.path) {
+          // Don't re-dispatch the message - this is causing an infinite loop
+          // Instead, just update our own state if needed
+          setFileTokenCounts(prev => {
+            const newMap = new Map(prev);
+            if (message.tokens !== undefined) {
+              newMap.set(message.path, message.tokens);
+            }
+            return newMap;
+          });
         }
       };
       
       window.addEventListener('message', handleMessage);
       return () => window.removeEventListener('message', handleMessage);
-    }, []);
+    }, [selectedModel, vscode]);
     
     // Request token count when content changes (with debounce)
     useEffect(() => {
@@ -537,7 +556,7 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
         >
           {/* Render content blocks */}
           {contentBlocks.map((block, index) => (
-            <React.Fragment key={index}>
+            <Box key={block.type === 'file' ? block.fileInfo?.id : `text-${index}`} sx={{ mb: 1 }}>
               {block.type === 'text' ? (
                 <InputBase
                   multiline
@@ -558,20 +577,14 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
                   }}
                 />
               ) : block.type === 'file' && block.fileInfo ? (
-                <Box sx={{ my: 0.5, display: 'block' }}
-                  onClick={(e) => {
-                    // Stop propagation to prevent the Paper's onClick from firing
-                    e.stopPropagation();
-                  }}
-                >
-                  <FileContents
-                    filePath={block.fileInfo.path}
-                    content={block.fileInfo.content}
-                    onRemove={removeFile}
-                  />
-                </Box>
+                <FileContents 
+                  filePath={block.fileInfo.path} 
+                  content={block.fileInfo.content} 
+                  onRemove={removeFile}
+                  tokenCount={fileTokenCounts.get(block.fileInfo.path) || null}
+                />
               ) : null}
-            </React.Fragment>
+            </Box>
           ))}
           
           {/* Token count display */}

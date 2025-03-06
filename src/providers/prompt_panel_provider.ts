@@ -391,6 +391,15 @@ export class PromptPanelProvider {
                             await this.handleCountInstructionsTokens(message.content, message.model);
                             break;
                         }
+                        case 'getApiSurfaceContent': {
+                            await this.sendApiSurfaceContentToWebview(message.path);
+                            break;
+                        }
+                        case 'toggleApiSurfaceUsage': {
+                            // Use the new method to handle API surface usage toggle
+                            await this.handleToggleApiSurfaceUsage(message.path, message.useApiSurface);
+                            break;
+                        }
                     }
                 } catch (error) {
                     console.error('Error handling message:', error);
@@ -554,12 +563,24 @@ export class PromptPanelProvider {
             const content = await vscode.workspace.fs.readFile(vscode.Uri.file(path));
             const text = new TextDecoder().decode(content);
             const tokenizerType = this.getTokenizerType(modelId);
+            let tokenCount: number | null = null;
+            
             if (tokenizerType === 'openai') {
-                return this.countTokens(text, modelId);
+                tokenCount = this.countTokens(text, modelId);
             } else if (tokenizerType === 'anthropic') {
-                return this.countAnthropicTokens(text, modelId);
+                tokenCount = await this.countAnthropicTokens(text, modelId);
             }
-            return null;
+            
+            // Send the token count for this specific file to the webview
+            if (tokenCount !== null) {
+                this.panel?.webview.postMessage({
+                    type: 'fileTokenCount',
+                    path: path,
+                    tokenCount: tokenCount
+                });
+            }
+            
+            return tokenCount;
         } catch (error) {
             console.error('Error reading file:', error);
             return null;
@@ -621,6 +642,8 @@ export class PromptPanelProvider {
 
     private async extractApiSurface(filePath: string): Promise<void> {
         try {
+            console.log(`PromptPanelProvider: Extracting API surface for ${filePath}`);
+            
             // Read the surface.md prompt
             const promptPath = path.join(this.context.extensionPath, 'llm', 'prompts', 'surface.md');
             const promptTemplate = await fsPromises.readFile(promptPath, 'utf-8');
@@ -632,8 +655,6 @@ export class PromptPanelProvider {
             const fullPrompt = `${promptTemplate}\n\n<file>${fileContent}</file>`;
             
             // Get API key from settings
-            // const config = vscode.workspace.getConfiguration('promptPilot');
-            // const apiKey = config.get<string>('openaiApiKey');
             const settings = await this.settingsManager.getGlobalSettings();
             
             if (!settings.openaiApiKey) {
@@ -676,8 +697,14 @@ export class PromptPanelProvider {
                 surfaceTokens = await this.countAnthropicTokens(JSON.stringify(apiSurface), this.selectedModel);
             }
 
+            console.log(`PromptPanelProvider: API surface extracted for ${filePath}, token count: ${surfaceTokens}`);
+
+            // Generate a unique message ID
+            const messageId = `apiSurfaceStatus:${filePath}:${Date.now()}`;
+
             // Send status back to webview
             this.panel?.webview.postMessage({
+                id: messageId,
                 type: 'apiSurfaceStatus',
                 path: filePath,
                 exists: true,
@@ -686,8 +713,13 @@ export class PromptPanelProvider {
 
         } catch (error) {
             console.error('Error extracting API surface:', error);
+            
+            // Generate a unique message ID
+            const messageId = `apiSurfaceStatus:${filePath}:${Date.now()}:error`;
+            
             // Notify webview of failure
             this.panel?.webview.postMessage({
+                id: messageId,
                 type: 'apiSurfaceStatus',
                 path: filePath,
                 exists: false,
@@ -753,5 +785,71 @@ export class PromptPanelProvider {
             type: 'instructionsTokenCount',
             tokenCount
         });
+    }
+
+    private async sendApiSurfaceContentToWebview(filePath: string): Promise<void> {
+        try {
+            const surface = await this.storageManager.getApiSurface(filePath);
+            if (surface) {
+                // Generate a unique message ID
+                const messageId = `apiSurfaceContent:${filePath}:${Date.now()}`;
+                
+                this.panel?.webview.postMessage({
+                    id: messageId,
+                    type: 'apiSurfaceContent',
+                    path: filePath,
+                    content: JSON.stringify(surface, null, 2)
+                });
+            }
+        } catch (error) {
+            console.error('Error sending API surface content:', error);
+        }
+    }
+
+    private async handleToggleApiSurfaceUsage(path: string, useApiSurface: boolean): Promise<void> {
+        console.log(`PromptPanelProvider: Toggling API surface usage for ${path} to ${useApiSurface}`);
+        
+        try {
+            // Get the current selected files
+            const selectedFiles = this.panel?.state.selectedFiles || [];
+            
+            // Find the file in the selected files
+            const fileIndex = selectedFiles.findIndex(f => f.path === path);
+            
+            if (fileIndex >= 0) {
+                // Get the API surface token count
+                let apiSurfaceTokens: number | null = null;
+                
+                if (useApiSurface) {
+                    const surface = await this.storageManager.getApiSurface(path);
+                    if (surface) {
+                        const tokenizerType = this.getTokenizerType(this.selectedModel);
+                        const surfaceText = JSON.stringify(surface);
+                        
+                        if (tokenizerType === 'openai') {
+                            const enc = encoding_for_model(this.selectedModel as TiktokenModel);
+                            apiSurfaceTokens = enc.encode(surfaceText).length;
+                            enc.free();
+                        } else if (tokenizerType === 'anthropic') {
+                            apiSurfaceTokens = await this.countAnthropicTokens(surfaceText, this.selectedModel);
+                        }
+                    }
+                }
+                
+                // Generate a unique message ID
+                const messageId = `apiSurfaceUsageChanged:${path}:${Date.now()}`;
+                
+                // Notify the webview that the API surface usage has changed
+                this.panel?.webview.postMessage({
+                    id: messageId,
+                    type: 'apiSurfaceUsageChanged',
+                    path: path,
+                    useApiSurface: useApiSurface,
+                    tokens: apiSurfaceTokens
+                });
+            }
+        } catch (error) {
+            console.error('Error handling API surface usage toggle:', error);
+        }
     }
 } 

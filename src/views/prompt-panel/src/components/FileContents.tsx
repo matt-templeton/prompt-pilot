@@ -1,24 +1,101 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Collapse, Paper, Typography, IconButton } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import CloseIcon from '@mui/icons-material/Close';
 import CodeIcon from '@mui/icons-material/Code';
+import { useVSCode } from '../contexts/VSCodeContext';
 
 interface FileContentsProps {
   filePath: string;
   content: string;
   onRemove?: (path: string) => void;
+  tokenCount?: number | null;
 }
 
-const FileContents: React.FC<FileContentsProps> = ({ filePath, content, onRemove }) => {
-  const [expanded, setExpanded] = useState(false);
+const FileContents: React.FC<FileContentsProps> = ({ filePath, content, onRemove, tokenCount }) => {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const vscode = useVSCode();
+  const [apiSurface, setApiSurface] = useState({
+    exists: false,
+    useApiSurface: false,
+    content: '',
+    tokenCount: null as number | null
+  });
+  
+  // Add a ref to track processed message IDs
+  const processedMessageIds = useRef<Set<string>>(new Set());
   
   // Extract just the filename from the path
   const fileName = filePath.split(/[/\\]/).pop() || filePath;
   
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const message = event.data;
+      
+      // Skip if no message ID or we've already processed this message
+      if (!message.id) {
+        // For messages without IDs, generate one based on content
+        message.id = `${message.type}:${message.path}:${Date.now()}`;
+      }
+      
+      if (processedMessageIds.current.has(message.id)) {
+        return;
+      }
+      
+      // Mark this message as processed
+      processedMessageIds.current.add(message.id);
+      
+      // Limit the size of the processed messages set
+      if (processedMessageIds.current.size > 100) {
+        // Convert to array, remove oldest entries, convert back to set
+        const messagesArray = Array.from(processedMessageIds.current);
+        processedMessageIds.current = new Set(messagesArray.slice(messagesArray.length - 50));
+      }
+      
+      if (message.type === 'apiSurfaceStatus' && message.path === filePath) {
+        setApiSurface(prev => ({
+          ...prev,
+          exists: message.exists,
+          tokenCount: message.tokens || null
+        }));
+        
+        // If API surface exists, request its content
+        if (message.exists) {
+          vscode.postMessage({
+            type: 'getApiSurfaceContent',
+            path: filePath
+          });
+        }
+      } else if (message.type === 'apiSurfaceContent' && message.path === filePath) {
+        setApiSurface(prev => ({
+          ...prev,
+          content: message.content
+        }));
+      } else if (message.type === 'apiSurfaceUsageChanged' && message.path === filePath) {
+        console.log(`FileContents: Received apiSurfaceUsageChanged for ${filePath}`, message);
+        setApiSurface(prev => ({
+          ...prev,
+          useApiSurface: message.useApiSurface,
+          // Update token count if provided
+          tokenCount: message.tokens !== undefined ? message.tokens : prev.tokenCount
+        }));
+      }
+    };
+
+    window.addEventListener('message', handler);
+    
+    // Check if API surface exists on mount
+    vscode.postMessage({
+      type: 'checkApiSurface',
+      path: filePath
+    });
+    
+    return () => window.removeEventListener('message', handler);
+  }, [filePath, vscode]);
+  
   const handleToggleExpand = () => {
-    setExpanded(!expanded);
+    setIsExpanded(!isExpanded);
   };
   
   const handleRemove = (event: React.MouseEvent) => {
@@ -29,11 +106,15 @@ const FileContents: React.FC<FileContentsProps> = ({ filePath, content, onRemove
   };
   
   // Determine styles based on expanded state
-  const headerBgColor = expanded ? 'primary.light' : 'action.hover';
-  const headerTextColor = expanded ? 'common.white' : 'text.primary';
-  const iconColor = expanded ? 'common.white' : 'text.secondary';
-  const buttonColor = expanded ? 'common.white' : 'inherit';
-  const borderColor = expanded ? 'primary.light' : 'divider';
+  const headerBgColor = isExpanded ? 'primary.light' : 'action.hover';
+  const headerTextColor = isExpanded ? 'common.white' : 'text.primary';
+  const iconColor = isExpanded ? 'common.white' : 'text.secondary';
+  const buttonColor = isExpanded ? 'common.white' : 'inherit';
+  const borderColor = isExpanded ? 'primary.light' : 'divider';
+  
+  // Determine which content and token count to display
+  const displayContent = apiSurface.useApiSurface && apiSurface.content ? apiSurface.content : content;
+  const displayTokenCount = apiSurface.useApiSurface ? apiSurface.tokenCount : tokenCount;
   
   return (
     <Paper 
@@ -80,6 +161,21 @@ const FileContents: React.FC<FileContentsProps> = ({ filePath, content, onRemove
         </Typography>
         
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          {/* Token count display */}
+          {displayTokenCount !== null && (
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                mr: 1,
+                color: headerTextColor,
+                opacity: 0.8,
+                fontSize: '0.7rem'
+              }}
+            >
+              {displayTokenCount} tokens
+            </Typography>
+          )}
+          
           {onRemove && (
             <IconButton 
               size="small" 
@@ -106,13 +202,13 @@ const FileContents: React.FC<FileContentsProps> = ({ filePath, content, onRemove
               }
             }}
           >
-            {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
           </IconButton>
         </Box>
       </Box>
       
       {/* Collapsible content */}
-      <Collapse in={expanded}>
+      <Collapse in={isExpanded}>
         <Box 
           sx={{ 
             p: 1,
@@ -134,7 +230,7 @@ const FileContents: React.FC<FileContentsProps> = ({ filePath, content, onRemove
               fontSize: '0.75rem'
             }}
           >
-            {content}
+            {displayContent}
           </Typography>
         </Box>
       </Collapse>

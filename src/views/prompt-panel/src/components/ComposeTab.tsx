@@ -195,6 +195,16 @@ const ComposeTab: React.FC = () => {
           processedMessagesRef.current.add(messageKey);
           break;
           
+        case 'apiSurfaceUsageChanged':
+          // Forward this message to the InstructionsBox
+          if (instructionsBoxRef.current) {
+            // The message will be handled by the FileContents components
+            // through the event listener in InstructionsBox
+          }
+          
+          processedMessagesRef.current.add(messageKey);
+          break;
+          
         default:
           console.log("ComposeTab: Unhandled message type:", message.type);
       }
