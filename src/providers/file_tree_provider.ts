@@ -105,21 +105,27 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
             if (isDirectory) {
                 console.log('FileTreeProvider: Unselecting directory and its contents:', path);
                 const allFiles = await this.getAllFilesInDirectory(path);
-                allFiles.forEach(file => this.selectedFiles.delete(file));
+                allFiles.forEach(file => {
+                    console.log('FileTreeProvider: Removing directory child from selectedFiles:', file);
+                    this.selectedFiles.delete(file);
+                });
             }
+            console.log('FileTreeProvider: Removing path from selectedFiles:', path);
             this.selectedFiles.delete(path);
             item.updateCheckboxState(false);
-            console.log('FileTreeProvider: Removed path from selectedFiles:', path);
         } else {
             // If selecting a directory, add all its files too
             if (isDirectory) {
                 console.log('FileTreeProvider: Selecting directory and its contents:', path);
                 const allFiles = await this.getAllFilesInDirectory(path);
-                allFiles.forEach(file => this.selectedFiles.add(file));
+                allFiles.forEach(file => {
+                    console.log('FileTreeProvider: Adding directory child to selectedFiles:', file);
+                    this.selectedFiles.add(file);
+                });
             }
+            console.log('FileTreeProvider: Added path to selectedFiles:', path);
             this.selectedFiles.add(path);
             item.updateCheckboxState(true);
-            console.log('FileTreeProvider: Added path to selectedFiles:', path);
         }
 
         console.log('FileTreeProvider: After toggle - selected files:', Array.from(this.selectedFiles));
@@ -376,7 +382,10 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileTreeItem> {
         console.log('FileTreeProvider: uncheckItemByPath called for path:', filePath);
         console.log('FileTreeProvider: Before uncheck - selected files:', Array.from(this.selectedFiles));
         
-        if (this.selectedFiles.has(filePath)) {
+        const wasSelected = this.selectedFiles.has(filePath);
+        console.log('FileTreeProvider: Path was in selectedFiles?', wasSelected);
+        
+        if (wasSelected) {
             console.log('FileTreeProvider: Path found in selectedFiles, removing it');
             this.selectedFiles.delete(filePath);
             

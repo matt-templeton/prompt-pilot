@@ -134,18 +134,27 @@ const ComposeTab: React.FC = () => {
             // Remove the file from the selected files list
             setSelectedFiles(prev => {
               console.log("ComposeTab: Current selectedFiles:", prev);
-              const newFiles = prev.filter(f => f.path !== message.path);
-              console.log("ComposeTab: New selectedFiles after removal:", newFiles);
-              return newFiles;
+              const fileIndex = prev.findIndex(f => f.path === message.path);
+              console.log("ComposeTab: File index in selectedFiles:", fileIndex);
+              
+              if (fileIndex >= 0) {
+                console.log("ComposeTab: File found in selectedFiles, removing");
+                const newFiles = prev.filter(f => f.path !== message.path);
+                console.log("ComposeTab: New selectedFiles after removal:", newFiles);
+                return newFiles;
+              } else {
+                console.log("ComposeTab: File not found in selectedFiles, no change needed");
+                return prev;
+              }
             });
             
             // Set removed file path for InstructionsBox
-            console.log("ComposeTab: Setting removedFilePath");
+            console.log("ComposeTab: Setting removedFilePath to:", message.path);
             setRemovedFilePath(message.path);
             
             // Also try using the ref approach as a backup
             if (instructionsBoxRef.current) {
-              console.log("ComposeTab: Removing file via ref");
+              console.log("ComposeTab: Removing file via ref for path:", message.path);
               instructionsBoxRef.current.removeFile(message.path);
             } else {
               console.error("ComposeTab: instructionsBoxRef.current is null, cannot call removeFile");

@@ -61,6 +61,28 @@ export class PromptPanelProvider {
             console.log('PromptPanelProvider: Number of selected files:', files.length);
             console.log('PromptPanelProvider: Panel exists?', !!this.panel);
             
+            if (this.panel) {
+                // Get the current selected files from the panel state
+                const currentSelectedFiles = this.panel.state?.selectedFiles || [];
+                console.log('PromptPanelProvider: Current selected files in panel state:', currentSelectedFiles);
+                
+                // Find files that were removed (in current state but not in new selection)
+                const removedFiles = currentSelectedFiles.filter(currentFile => 
+                    !files.some(newFile => newFile.path === currentFile.path)
+                );
+                
+                console.log('PromptPanelProvider: Detected removed files:', removedFiles);
+                
+                // Send fileUnselected message for each removed file
+                for (const removedFile of removedFiles) {
+                    console.log('PromptPanelProvider: Sending fileUnselected message for:', removedFile.path);
+                    this.panel.webview.postMessage({
+                        type: 'fileUnselected',
+                        path: removedFile.path
+                    });
+                }
+            }
+            
             // Process files with token counts
             console.log('PromptPanelProvider: Processing files with token counts');
             const filesWithTokens = await Promise.all(
@@ -230,14 +252,16 @@ export class PromptPanelProvider {
                             if (message.action === 'uncheck') {
                                 // Handle uncheck action
                                 console.log('PromptPanelProvider: Unchecking file:', message.file);
-                                await this.fileTreeProvider.uncheckItemByPath(message.file);
                                 
-                                // Send a single fileUnselected message
+                                // First, send a fileUnselected message to the webview
                                 console.log('PromptPanelProvider: Sending fileUnselected message for:', message.file);
                                 this.panel?.webview.postMessage({
                                     type: 'fileUnselected',
                                     path: message.file
                                 });
+                                
+                                // Then, uncheck the item in the file tree provider
+                                await this.fileTreeProvider.uncheckItemByPath(message.file);
                             } else {
                                 // Handle regular toggle
                                 console.log('PromptPanelProvider: Toggling file selection:', message.file);

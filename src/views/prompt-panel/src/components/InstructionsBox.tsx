@@ -220,6 +220,21 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     const removeFile = (path: string) => {
       console.log("InstructionsBox: removeFile called for path:", path);
       
+      // Check if the file exists in fileContents
+      const fileExists = fileContents.some(file => file.path === path);
+      console.log("InstructionsBox: File exists in fileContents?", fileExists);
+      
+      // Check if the file exists in contentBlocks
+      const blockExists = contentBlocks.some(block => 
+        block.type === 'file' && block.fileInfo?.path === path
+      );
+      console.log("InstructionsBox: File exists in contentBlocks?", blockExists);
+      
+      if (!fileExists && !blockExists) {
+        console.log("InstructionsBox: File not found in either fileContents or contentBlocks, nothing to remove");
+        return;
+      }
+      
       // Remove file from fileContents array
       setFileContents(prev => {
         console.log("InstructionsBox: Current fileContents:", prev);
