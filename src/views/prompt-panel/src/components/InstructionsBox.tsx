@@ -57,8 +57,77 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     };
 
     const formatPathForXmlTag = (path: string): string => {
-      // Replace slashes and backslashes with dots
-      return path.replace(/[/\\]/g, '.');
+      console.log('InstructionsBox: Formatting path for XML tag:', path);
+      
+      // Extract the path from the project root directory
+      // First, split the path by directory separators
+      const pathParts = path.split(/[/\\]/);
+      
+      // In VS Code, we can identify the project root by looking for patterns in the path
+      // For example: C:/Users/Matt/Documents/extension/prompt-pilot/src/file.ts
+      // We want to extract: src/file.ts
+      
+      // First, try to find the workspace folder name in the path
+      // The workspace folder is typically the last folder before the source files
+      
+      // Extract potential workspace folder names from the path itself
+      // This makes the solution more dynamic and adaptable to different projects
+      const potentialWorkspaceFolders = [];
+      
+      // Look for common patterns to identify workspace folders
+      for (const part of pathParts) {
+        // Skip system folders and very common names
+        if (['c:', 'users', 'documents', 'downloads', 'desktop'].includes(part.toLowerCase())) {
+          continue;
+        }
+        
+        // Add potential workspace folders to our candidates list
+        potentialWorkspaceFolders.push(part);
+      }
+      
+      // Add some common workspace folder names as fallbacks
+      const workspaceFolderCandidates = [
+        ...potentialWorkspaceFolders,
+        'prompt-pilot', 
+        'extension', 
+        'sidekick'
+      ];
+      
+      let projectRelativePath = '';
+      
+      // Try to find the workspace folder in the path
+      for (const candidate of workspaceFolderCandidates) {
+        const index = pathParts.findIndex(part => 
+          part.toLowerCase() === candidate.toLowerCase());
+        
+        if (index !== -1 && index < pathParts.length - 1) {
+          // Found the workspace folder, extract everything after it
+          projectRelativePath = pathParts.slice(index + 1).join('.');
+          console.log(`InstructionsBox: Found workspace folder "${candidate}" at index ${index}`);
+          break;
+        }
+      }
+      
+      // If we couldn't find a known workspace folder, use a fallback approach
+      if (!projectRelativePath) {
+        // Try to find common source folder patterns
+        const srcIndex = pathParts.findIndex(part => 
+          ['src', 'source', 'app', 'lib', 'web_ui'].includes(part.toLowerCase()));
+        
+        if (srcIndex !== -1) {
+          // Found a source folder, extract from there
+          projectRelativePath = pathParts.slice(srcIndex).join('.');
+          console.log(`InstructionsBox: Found source folder at index ${srcIndex}`);
+        } else {
+          // Last resort: just use the filename and its parent directory
+          const relevantParts = pathParts.slice(Math.max(0, pathParts.length - 2));
+          projectRelativePath = relevantParts.join('.');
+          console.log('InstructionsBox: Using fallback path extraction');
+        }
+      }
+      
+      console.log('InstructionsBox: Formatted path result:', projectRelativePath);
+      return projectRelativePath;
     };
 
     // Process fileContent prop when it changes
