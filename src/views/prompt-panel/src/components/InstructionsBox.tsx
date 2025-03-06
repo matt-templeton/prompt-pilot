@@ -334,7 +334,29 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
             p: 1.5,
             overflowY: 'auto',
             minHeight: '200px',
-            backgroundColor: 'background.paper'
+            backgroundColor: 'background.paper',
+            cursor: 'text'
+          }}
+          onClick={() => {
+            // When clicking anywhere in the paper, focus the last text input block
+            // This allows users to click anywhere in the empty space to start typing
+            const textBlockIndices = contentBlocks
+              .map((block, index) => block.type === 'text' ? index : -1)
+              .filter(index => index !== -1);
+            
+            if (textBlockIndices.length > 0) {
+              // Focus the last text block for a natural writing flow
+              const lastTextIndex = textBlockIndices[textBlockIndices.length - 1];
+              focusInput(lastTextIndex);
+              setActiveBlockIndex(lastTextIndex);
+            } else {
+              // If no text blocks exist (rare case), add one and focus it
+              const newTextBlock: ContentBlock = { type: 'text', content: '' };
+              const newBlocks = [...contentBlocks, newTextBlock];
+              setContentBlocks(newBlocks);
+              setActiveBlockIndex(newBlocks.length - 1);
+              setTimeout(() => focusInput(newBlocks.length - 1), 0);
+            }
           }}
         >
           {/* Render content blocks */}
@@ -355,9 +377,17 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
                     width: '100%',
                     minHeight: '1.5rem'
                   }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
                 />
               ) : block.type === 'file' && block.fileInfo ? (
-                <Box sx={{ my: 0.5, display: 'block' }}>
+                <Box sx={{ my: 0.5, display: 'block' }}
+                  onClick={(e) => {
+                    // Stop propagation to prevent the Paper's onClick from firing
+                    e.stopPropagation();
+                  }}
+                >
                   <FileContents
                     filePath={block.fileInfo.path}
                     content={block.fileInfo.content}
