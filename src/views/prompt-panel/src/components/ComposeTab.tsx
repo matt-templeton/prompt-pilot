@@ -57,6 +57,12 @@ const ComposeTab: React.FC = () => {
       } else if (message.type === 'fileSelected' && message.file && message.file.path) {
         // For fileSelected messages, include the file path in the key
         messageKey += `:${message.file.path}`;
+      } else if (message.type === 'selectedFiles' && message.files) {
+        // For selectedFiles messages, include a hash of the token counts to detect updates
+        const tokenCountsHash = message.files
+          .map((file: SelectedPath) => `${file.path}:${file.tokenCount}`)
+          .join('|');
+        messageKey += `:${tokenCountsHash}`;
       }
       if (message.content) {messageKey += `:${message.content.length}`;}
       
@@ -81,6 +87,7 @@ const ComposeTab: React.FC = () => {
           
         case 'selectedFiles':
           console.log("ComposeTab: Processing selectedFiles message, files:", message.files);
+          console.log("ComposeTab: Token counts in selectedFiles message:", message.files.map((f: SelectedPath) => ({ path: f.path, tokenCount: f.tokenCount })));
           setSelectedFiles(message.files);
           processedMessagesRef.current.add(messageKey);
           break;

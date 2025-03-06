@@ -18,6 +18,8 @@ interface ApiSurfaceState {
 }
 
 const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
+  console.log("IN HEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEREERE");
+  console.log(tokenCount);
   const vscode = useVSCode();
   const [apiSurface, setApiSurface] = React.useState<ApiSurfaceState>({
     exists: false,
