@@ -60,6 +60,7 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     const lastFileContentRef = useRef<{ path: string; content: string } | null>(null);
     const lastTokenCountRequestRef = useRef<string>('');
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const previousModelRef = useRef<string>(''); // Add ref to track previous model
     
     // Ref for the text input elements
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -114,20 +115,16 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     // Update the debounced request function when dependencies change
     useEffect(() => {
       debouncedRequestRef.current = () => {
-        console.log("InstructionsBox: debouncedRequestRef function called");
         
         // Clear any existing timer
         if (debounceTimerRef.current) {
-          console.log("InstructionsBox: Clearing existing debounce timer");
           clearTimeout(debounceTimerRef.current);
         }
         
         // Set a new timer for 2 seconds
-        console.log("InstructionsBox: Setting new debounce timer for 2 seconds");
         debounceTimerRef.current = setTimeout(() => {
-          console.log("InstructionsBox: Debounce timer expired, calling requestTokenCount");
           requestTokenCount();
-        }, 8000);
+        }, 1500);
       };
     }, [requestTokenCount]);
     
@@ -137,7 +134,6 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
         const message = event.data;
         
         if (message.type === 'instructionsTokenCount') {
-          console.log(`InstructionsBox: Received token count: ${message.tokenCount}`);
           setTotalTokenCount(message.tokenCount);
           setIsCountingTokens(false);
         }
@@ -149,7 +145,6 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     
     // Request token count when content changes (with debounce)
     useEffect(() => {
-      console.log("InstructionsBox: Content blocks changed, triggering debounced token count");
       if (selectedModel) {
         debouncedRequestRef.current();
       }
@@ -164,16 +159,41 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     
     // Request token count immediately when model changes
     useEffect(() => {
-      console.log(`InstructionsBox: Model changed to ${selectedModel}, triggering immediate token count`);
-      if (selectedModel) {
-        // Clear any existing timer
-        if (debounceTimerRef.current) {
-          clearTimeout(debounceTimerRef.current);
+      // Only run this effect if the model has actually changed
+      if (selectedModel !== previousModelRef.current) {
+        console.log(`InstructionsBox: Model actually changed from ${previousModelRef.current} to ${selectedModel}, triggering immediate token count`);
+        previousModelRef.current = selectedModel;
+        
+        if (selectedModel) {
+          // Clear any existing timer
+          if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+          }
+          
+          // Request token count immediately - implement logic directly to avoid dependency on requestTokenCount
+          const combinedContent = getCombinedContentForTokenCount();
+          console.log(`InstructionsBox: Combined content length: ${combinedContent.length}`);
+          
+          // Create a hash of the content to avoid unnecessary requests
+          const contentHash = `${selectedModel}:${combinedContent.length}:${contentBlocks.length}`;
+          
+          // Skip if we've already requested token count for this content
+          if (contentHash !== lastTokenCountRequestRef.current) {
+            console.log(`InstructionsBox: Content changed, requesting token count for hash: ${contentHash}`);
+            lastTokenCountRequestRef.current = contentHash;
+            setIsCountingTokens(true);
+            
+            vscode.postMessage({
+              type: 'countInstructionsTokens',
+              content: combinedContent,
+              model: selectedModel
+            });
+          } else {
+            console.log("InstructionsBox: Content unchanged, skipping token count request");
+          }
         }
-        // Request token count immediately
-        requestTokenCount();
       }
-    }, [selectedModel, requestTokenCount]);
+    }, [selectedModel, vscode]); // Remove contentBlocks from dependencies
     
     const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
       setAnchorEl(event.currentTarget);
@@ -335,27 +355,19 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
         onAddFileContent(path, content);
       }
       
-      // Trigger immediate token count update
-      if (debounceTimerRef.current) {
-        console.log("InstructionsBox: Clearing debounce timer after file add");
-        clearTimeout(debounceTimerRef.current);
-      }
-      console.log("InstructionsBox: Requesting immediate token count after file add");
-      requestTokenCount();
+      // Trigger debounced token count update instead of immediate
+      debouncedRequestRef.current();
     };
 
     const removeFile = (path: string) => {
-      console.log("InstructionsBox: removeFile called for path:", path);
       
       // Check if the file exists in fileContents
       const fileExists = fileContents.some(file => file.path === path);
-      console.log("InstructionsBox: File exists in fileContents?", fileExists);
       
       // Check if the file exists in contentBlocks
       const blockExists = contentBlocks.some(block => 
         block.type === 'file' && block.fileInfo?.path === path
       );
-      console.log("InstructionsBox: File exists in contentBlocks?", blockExists);
       
       if (!fileExists && !blockExists) {
         console.log("InstructionsBox: File not found in either fileContents or contentBlocks, nothing to remove");
@@ -422,18 +434,13 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
         onRemoveFile(path);
       }
       
-      // Trigger immediate token count update
-      if (debounceTimerRef.current) {
-        console.log("InstructionsBox: Clearing debounce timer after file removal");
-        clearTimeout(debounceTimerRef.current);
-      }
-      console.log("InstructionsBox: Requesting immediate token count after file removal");
-      requestTokenCount();
+      // Trigger debounced token count update instead of immediate
+      console.log("InstructionsBox: Triggering debounced token count after file removal");
+      debouncedRequestRef.current();
     };
     
     // Handle text input change
     const handleTextChange = (index: number, value: string) => {
-      console.log(`InstructionsBox: Text changed at index ${index}`);
       const newBlocks = [...contentBlocks];
       if (newBlocks[index].type === 'text') {
         newBlocks[index].content = value;
