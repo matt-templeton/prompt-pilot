@@ -9,7 +9,7 @@ const ModelContext = createContext<ModelContextType | undefined>(undefined);
 
 export const ModelProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const [selectedModel, setSelectedModel] = useState('');
-  
+
   return (
     <ModelContext.Provider value={{ selectedModel, setSelectedModel }}>
       {children}

@@ -32,9 +32,6 @@ interface ContentBlock {
 
 const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
   ({ onAddFileContent, onRemoveFile, fileContent, removedFilePath }, ref) => {
-    console.log("InstructionsBox: Component rendering with ref:", !!ref);
-    console.log("InstructionsBox: Received fileContent prop:", fileContent);
-    console.log("InstructionsBox: Received removedFilePath prop:", removedFilePath);
     
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [selectedPrompts, setSelectedPrompts] = useState<string[]>([]);
@@ -132,8 +129,6 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
 
     // Public method to add file content
     const addFileContent = (path: string, content: string) => {
-      console.log('InstructionsBox: addFileContent called with path:', path);
-      
       // Check if we already have this file in our content blocks
       const fileExists = contentBlocks.some(block => 
         block.type === 'file' && block.fileInfo?.path === path
@@ -141,7 +136,6 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
       
       // If the file already exists in our content blocks, don't add it again
       if (fileExists) {
-        console.log('InstructionsBox: File already exists in content blocks, skipping addition:', path);
         return;
       }
       
@@ -210,8 +204,6 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     };
 
     const removeFile = (path: string) => {
-      console.log('InstructionsBox: removeFile called with path:', path);
-      
       // Remove file from fileContents array
       setFileContents(prev => prev.filter(file => file.path !== path));
       

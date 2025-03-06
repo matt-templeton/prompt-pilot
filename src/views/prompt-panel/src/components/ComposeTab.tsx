@@ -25,7 +25,6 @@ interface SelectedPath {
 }
 
 const ComposeTab: React.FC = () => {
-  console.log("ComposeTab: Component mounting");
   const vscode = useVSCode();
   const { selectedModel, setSelectedModel } = useModel();
   const [modelsByProvider, setModelsByProvider] = useState<ModelsByProvider>({ openai: [], anthropic: [] });
@@ -43,22 +42,22 @@ const ComposeTab: React.FC = () => {
   }, []);
   
   useEffect(() => {
-    console.log("ComposeTab: Setting up message listener");
     // Request models from extension
     vscode.postMessage({ type: 'getModels' });
 
     const messageHandler = (event: MessageEvent) => {
       const message = event.data;
       
-      // Create a unique key for this message to avoid processing duplicates
-      const messageKey = `${message.type}-${JSON.stringify(message)}`;
+      // Create a unique key for this message to prevent duplicate processing
+      let messageKey = `${message.type}`;
+      if (message.path) {messageKey += `:${message.path}`;}
+      if (message.content) {messageKey += `:${message.content.length}`;}
       
       // Skip if we've already processed this exact message
       if (processedMessagesRef.current.has(messageKey)) {
         return;
       }
       
-      console.log("ComposeTab: Message received:", message);
       
       // Handle different message types
       switch (message.type) {
@@ -69,13 +68,11 @@ const ComposeTab: React.FC = () => {
           break;
           
         case 'selectedFiles':
-          console.log("ComposeTab: Received selected files:", message.files);
           setSelectedFiles(message.files);
           processedMessagesRef.current.add(messageKey);
           break;
           
         case 'fileSelected':
-          console.log("ComposeTab: Received fileSelected for:", message.file.path);
           
           // Update the selected files list to include this file
           setSelectedFiles(prev => {
@@ -101,7 +98,6 @@ const ComposeTab: React.FC = () => {
           // Use the ref approach to add file content
           // This is the only place we should call addFileContent to avoid duplicates
           if (instructionsBoxRef.current) {
-            console.log("ComposeTab: instructionsBoxRef.current exists, calling addFileContent");
             instructionsBoxRef.current.addFileContent(message.file.path, message.content);
           } else {
             console.error("ComposeTab: instructionsBoxRef.current is null, cannot call addFileContent");
@@ -111,7 +107,6 @@ const ComposeTab: React.FC = () => {
           break;
           
         case 'fileUnselected':
-          console.log("ComposeTab: File unselected:", message.path);
           
           // Remove the file from the selected files list
           setSelectedFiles(prev => prev.filter(f => f.path !== message.path));
@@ -121,7 +116,6 @@ const ComposeTab: React.FC = () => {
           
           // Also try using the ref approach as a backup
           if (instructionsBoxRef.current) {
-            console.log("ComposeTab: instructionsBoxRef.current exists, calling removeFile");
             instructionsBoxRef.current.removeFile(message.path);
           } else {
             console.error("ComposeTab: instructionsBoxRef.current is null, cannot call removeFile");
@@ -132,7 +126,6 @@ const ComposeTab: React.FC = () => {
           
         case 'fileContent':
           // Keep this for backward compatibility, but it should no longer be used
-          console.log("ComposeTab: Received legacy fileContent for:", message.path);
           // Set current file content for InstructionsBox
           setCurrentFileContent({
             path: message.path,
@@ -141,7 +134,6 @@ const ComposeTab: React.FC = () => {
           
           // Also try using the ref approach as a backup
           if (instructionsBoxRef.current) {
-            console.log("ComposeTab: instructionsBoxRef.current exists, calling addFileContent");
             instructionsBoxRef.current.addFileContent(message.path, message.content);
           } else {
             console.error("ComposeTab: instructionsBoxRef.current is null, cannot call addFileContent");
@@ -152,13 +144,11 @@ const ComposeTab: React.FC = () => {
           
         case 'fileRemoved':
           // Keep this for backward compatibility, but it should no longer be used
-          console.log("ComposeTab: Received legacy fileRemoved:", message.path);
           // Set removed file path for InstructionsBox
           setRemovedFilePath(message.path);
           
           // Also try using the ref approach as a backup
           if (instructionsBoxRef.current) {
-            console.log("ComposeTab: instructionsBoxRef.current exists, calling removeFile");
             instructionsBoxRef.current.removeFile(message.path);
           } else {
             console.error("ComposeTab: instructionsBoxRef.current is null, cannot call removeFile");
@@ -207,7 +197,6 @@ const ComposeTab: React.FC = () => {
   };
   
   const handleRequestFiles = () => {
-    console.log("ComposeTab: Requesting selected files");
     vscode.postMessage({ 
       type: 'getSelectedFiles',
       action: 'get'
@@ -215,14 +204,12 @@ const ComposeTab: React.FC = () => {
   };
   
   const handleFileDelete = (path: string) => {
-    console.log("ComposeTab: Deleting file:", path);
     
     // First, remove the file from the selected files list
     setSelectedFiles(prev => prev.filter(f => f.path !== path));
     
     // Then, try to remove the file content from InstructionsBox directly
     if (instructionsBoxRef.current) {
-      console.log("ComposeTab: Calling removeFile on instructionsBoxRef for path:", path);
       instructionsBoxRef.current.removeFile(path);
     }
     
@@ -238,7 +225,6 @@ const ComposeTab: React.FC = () => {
   };
   
   const handleModelChangeWithFiles = (model: string, files: SelectedPath[]) => {
-    console.log("ComposeTab: Model changed with files:", model, files);
     vscode.postMessage({
       type: 'selectedFiles',
       action: 'update',

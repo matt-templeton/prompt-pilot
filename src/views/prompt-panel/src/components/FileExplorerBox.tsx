@@ -32,11 +32,9 @@ const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({
   const [fileTokens, setFileTokens] = useState<Map<string, number | null>>(new Map());
   const hasRequestedFiles = useRef(false);
   const currentFiles = useRef<SelectedPath[]>([]);
-  const previousModelRef = useRef<string>(selectedModel);
 
   // Process selected files when they change
   useEffect(() => {
-    console.log("FileExplorerBox: Processing selected files:", selectedFiles);
     handleSelectedFilesUpdate(selectedFiles);
   }, [selectedFiles]);
 
@@ -69,13 +67,11 @@ const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({
       });
     }
 
-    console.log("FileExplorerBox: New directory map:", newDirectoryMap);
     setDirectoryMap(newDirectoryMap);
     setFileTokens(newFileTokens);
     
     // Update expanded dirs
     const newDirs = Object.keys(newDirectoryMap);
-    console.log("FileExplorerBox: Updating expanded directories:", newDirs);
     setExpandedDirs(prev => {
       const next = new Set(prev);
       newDirs.forEach(dir => next.add(dir));
@@ -86,7 +82,6 @@ const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({
   // Request files on mount
   useEffect(() => {
     if (!hasRequestedFiles.current && onRequestFiles) {
-      console.log("FileExplorerBox: Making initial files request");
       onRequestFiles();
       hasRequestedFiles.current = true;
     }
@@ -94,22 +89,12 @@ const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({
 
   // Handle model changes
   useEffect(() => {
-    // Only proceed if the model has actually changed
-    if (previousModelRef.current !== selectedModel) {
-      console.log("FileExplorerBox: Model changed from", previousModelRef.current, "to:", selectedModel);
-      
-      // Update the ref with the new value
-      previousModelRef.current = selectedModel;
-      
-      if (selectedModel && currentFiles.current.length > 0 && onModelChange) {
-        console.log("FileExplorerBox: Requesting retokenization for files:", currentFiles.current);
-        onModelChange(selectedModel, currentFiles.current);
-      }
+    if (selectedModel && currentFiles.current.length > 0 && onModelChange) {
+      onModelChange(selectedModel, currentFiles.current);
     }
   }, [selectedModel, onModelChange]);
 
   const handleFileDelete = (fileToDelete: string) => {
-    console.log("FileExplorerBox: Deleting file:", fileToDelete);
     if (onFileDelete) {
       onFileDelete(fileToDelete);
     } else {
