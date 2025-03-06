@@ -1,5 +1,5 @@
 import React, { useState, forwardRef, useImperativeHandle, useEffect, useRef } from 'react';
-import { Box, Paper, Chip, Menu, MenuItem, TextField, Typography, Button } from '@mui/material';
+import { Box, Paper, Chip, Menu, MenuItem, Typography, Button, InputBase } from '@mui/material';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 
 const DUMMY_PROMPTS = ['Template 1', 'Template 2', 'Custom Prompt'];
@@ -59,10 +59,6 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     const formatPathForXmlTag = (path: string): string => {
       // Replace slashes and backslashes with dots
       return path.replace(/[/\\]/g, '.');
-    };
-
-    const handleInstructionsChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      setInstructionsText(event.target.value);
     };
 
     // Process fileContent prop when it changes
@@ -190,12 +186,19 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     }, []);
 
     return (
-      <Paper sx={{ p: 2 }}>
+      <Paper sx={{ 
+        p: 2, 
+        display: 'flex',
+        flexDirection: 'column',
+        height: '50%', // Take up half of the available space
+        overflow: 'hidden' // Prevent the paper from scrolling
+      }}>
         <Box sx={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center',
-          mb: 2 
+          mb: 2,
+          flexShrink: 0 // Prevent this container from shrinking
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Typography variant="h6">Instructions</Typography>
@@ -236,15 +239,61 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
           </Menu>
         </Box>
         
-        <TextField
-          multiline
-          fullWidth
-          minRows={10}
-          placeholder="Enter your instructions here..."
-          variant="outlined"
-          value={instructionsText}
-          onChange={handleInstructionsChange}
-        />
+        <Box sx={{ 
+          flexGrow: 1, 
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative'
+        }}>
+          {/* Use InputBase with custom styling to match Material-UI's appearance */}
+          <Box
+            sx={{
+              width: '100%',
+              height: '100%',
+              border: '1px solid rgba(0, 0, 0, 0.23)',
+              borderRadius: '4px',
+              backgroundColor: 'rgba(0, 0, 0, 0.06)', // More accurate Material-UI background color
+              overflow: 'hidden',
+              '&:hover': {
+                borderColor: 'rgba(0, 0, 0, 0.87)'
+              },
+              '&:focus-within': {
+                borderColor: '#1976d2',
+                borderWidth: '2px',
+                padding: '0'
+              },
+              padding: '1px',
+              transition: 'border-color 0.2s ease-in-out'
+            }}
+          >
+            <InputBase
+              multiline
+              fullWidth
+              placeholder="Enter your instructions here..."
+              value={instructionsText}
+              onChange={(e) => setInstructionsText(e.target.value)}
+              sx={{
+                height: '100%',
+                padding: '13px',
+                fontFamily: 'inherit',
+                fontSize: 'inherit',
+                display: 'flex',
+                flexDirection: 'column',
+                '& .MuiInputBase-input': {
+                  height: '100% !important',
+                  overflow: 'auto !important',
+                  flexGrow: 1
+                }
+              }}
+              inputProps={{
+                style: {
+                  height: '100%',
+                  overflow: 'auto'
+                }
+              }}
+            />
+          </Box>
+        </Box>
       </Paper>
     );
   }

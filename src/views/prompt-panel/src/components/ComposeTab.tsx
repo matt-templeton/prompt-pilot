@@ -249,20 +249,40 @@ const ComposeTab: React.FC = () => {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100vh' }}>
-      <InstructionsBox 
-        ref={instructionsBoxRef}
-        fileContent={currentFileContent}
-        removedFilePath={removedFilePath}
-      />
-      <FileExplorerBox 
-        selectedFiles={selectedFiles}
-        onFileDelete={handleFileDelete}
-        onRequestFiles={handleRequestFiles}
-        onModelChange={handleModelChangeWithFiles}
-      />
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100vh',
+      overflow: 'hidden' // Prevent the compose tab from scrolling
+    }}>
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: 2, 
+        flexGrow: 1,
+        overflow: 'hidden' // Prevent this container from scrolling
+      }}>
+        <InstructionsBox 
+          ref={instructionsBoxRef}
+          fileContent={currentFileContent}
+          removedFilePath={removedFilePath}
+        />
+        <FileExplorerBox 
+          selectedFiles={selectedFiles}
+          onFileDelete={handleFileDelete}
+          onRequestFiles={handleRequestFiles}
+          onModelChange={handleModelChangeWithFiles}
+        />
+      </Box>
       
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, p: 1 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        gap: 2, 
+        p: 1,
+        flexShrink: 0 // Prevent this container from shrinking
+      }}>
         <Button variant="contained" color="primary">
           Copy
         </Button>

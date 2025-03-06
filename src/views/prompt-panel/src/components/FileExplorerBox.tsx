@@ -134,12 +134,24 @@ const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({
   });
 
   return (
-    <Paper sx={{ p: 2 }}>
-      <Typography variant="h6" sx={{ mb: 2 }}>
+    <Paper sx={{ 
+      p: 2,
+      display: 'flex',
+      flexDirection: 'column',
+      height: '50%', // Take up half of the available space
+      overflow: 'hidden' // Prevent the paper from scrolling
+    }}>
+      <Typography variant="h6" sx={{ mb: 2, flexShrink: 0 }}>
         Selected Files
       </Typography>
       
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: 1,
+        flexGrow: 1,
+        overflow: 'auto' // Make this container scrollable
+      }}>
         {sortedDirectories.map(dirPath => (
           <Directory
             key={dirPath}
