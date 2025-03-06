@@ -35,10 +35,8 @@ const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({
 
   // Process selected files when they change
   useEffect(() => {
-    if (selectedFiles && selectedFiles.length > 0) {
-      console.log("FileExplorerBox: Processing selected files:", selectedFiles);
-      handleSelectedFilesUpdate(selectedFiles);
-    }
+    console.log("FileExplorerBox: Processing selected files:", selectedFiles);
+    handleSelectedFilesUpdate(selectedFiles);
   }, [selectedFiles]);
 
   const handleSelectedFilesUpdate = (files: SelectedPath[]) => {

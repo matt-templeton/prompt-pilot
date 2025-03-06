@@ -58,6 +58,7 @@ export class PromptPanelProvider {
         this.fileTreeProvider.onDidChangeSelection(async files => {
             console.log('PromptPanelProvider: Received selection change:', files);
             
+            // Process files with token counts
             const filesWithTokens = await Promise.all(
                 files.map(async file => ({
                     ...file,
@@ -66,26 +67,40 @@ export class PromptPanelProvider {
                 }))
             );
 
-            console.log('PromptPanelProvider: Sending files to webview:', filesWithTokens);
+            console.log('PromptPanelProvider: Processed files with tokens:', filesWithTokens);
+            
             if (this.panel) {
+                // Update panel state
                 this.panel.state = {
                     ...this.panel.state,
                     selectedFiles: filesWithTokens
                 };
                 
-                // First send the selectedFiles message
+                // Send the updated list of selected files
                 console.log('PromptPanelProvider: Sending selectedFiles message');
                 this.panel.webview.postMessage({
                     type: 'selectedFiles',
                     files: filesWithTokens
                 });
                 
-                // Then send file content for each selected file
-                console.log('PromptPanelProvider: Sending file content for selected files');
-                for (const file of files) {
+                // For each file, read its content and send it in the same message
+                for (const file of filesWithTokens) {
                     if (!file.isDirectory) {
-                        console.log('PromptPanelProvider: Sending content for file:', file.path);
-                        await this.sendFileContentToWebview(file.path);
+                        try {
+                            // Read file content
+                            const content = await vscode.workspace.fs.readFile(vscode.Uri.file(file.path));
+                            const text = new TextDecoder().decode(content);
+                            
+                            // Send a fileSelected message with both file metadata and content
+                            console.log('PromptPanelProvider: Sending fileSelected message for:', file.path);
+                            this.panel.webview.postMessage({
+                                type: 'fileSelected',
+                                file: file,
+                                content: text
+                            });
+                        } catch (error) {
+                            console.error('Error reading file content:', error);
+                        }
                     }
                 }
             } else {
@@ -202,9 +217,10 @@ export class PromptPanelProvider {
                                 // Handle uncheck action
                                 await this.fileTreeProvider.uncheckItemByPath(message.file);
                                 
-                                // Send a message to the webview that the file was removed
+                                // Send a single fileUnselected message
+                                console.log('PromptPanelProvider: Sending fileUnselected message for:', message.file);
                                 this.panel?.webview.postMessage({
-                                    type: 'fileRemoved',
+                                    type: 'fileUnselected',
                                     path: message.file
                                 });
                             } else {
@@ -213,11 +229,7 @@ export class PromptPanelProvider {
                                     resourceUri: vscode.Uri.file(message.file)
                                 });
                                 
-                                // If this is a file (not a directory), send its content to the webview
-                                const stats = await vscode.workspace.fs.stat(vscode.Uri.file(message.file));
-                                if (stats.type === vscode.FileType.File) {
-                                    await this.sendFileContentToWebview(message.file);
-                                }
+                                // The onDidChangeSelection event will handle sending the fileSelected message
                             }
                             break;
                         }

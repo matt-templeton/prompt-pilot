@@ -104,6 +104,11 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
         
         // Process the file removal
         removeFile(removedFilePath);
+      } else {
+        // When removedFilePath is null, we can clear the processed removals set
+        // This allows us to process the same file removal again if needed
+        console.log('InstructionsBox: Clearing processed removals set');
+        processedRemovalsRef.current.clear();
       }
     }, [removedFilePath]); // Intentionally omitting removeFile from deps to prevent loops
 
@@ -147,9 +152,19 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     // Public method to remove file
     const removeFile = (path: string) => {
       console.log('InstructionsBox: removeFile called with path:', path);
+      
+      // Remove file from fileContents array
       setFileContents(prev => prev.filter(file => file.path !== path));
-      // Note: We don't remove content from the text field automatically
-      // as it might have been edited by the user
+      
+      // Remove file content from instructions text
+      const formattedPath = formatPathForXmlTag(path);
+      setInstructionsText(prev => {
+        // Create regex to match the entire XML tag block for this file
+        const regex = new RegExp(`\\n<${formattedPath}>\\n[\\s\\S]*?\\n</${formattedPath}>\\n`, 'g');
+        const newText = prev.replace(regex, '');
+        console.log('InstructionsBox: Removed file content from instructions text for path:', path);
+        return newText;
+      });
       
       // Call the callback if provided
       if (onRemoveFile) {

@@ -76,8 +76,64 @@ const ComposeTab: React.FC = () => {
           processedMessagesRef.current.add(messageKey);
           break;
           
+        case 'fileSelected':
+          console.log("ComposeTab: Received fileSelected for:", message.file.path);
+          
+          // Update the selected files list to include this file
+          setSelectedFiles(prev => {
+            // Check if this file is already in the list
+            const fileIndex = prev.findIndex(f => f.path === message.file.path);
+            if (fileIndex >= 0) {
+              // Replace the existing file
+              const newFiles = [...prev];
+              newFiles[fileIndex] = message.file;
+              return newFiles;
+            } else {
+              // Add the new file
+              return [...prev, message.file];
+            }
+          });
+          
+          // Set current file content for InstructionsBox
+          setCurrentFileContent({
+            path: message.file.path,
+            content: message.content
+          });
+          
+          // Also try using the ref approach as a backup
+          if (instructionsBoxRef.current) {
+            console.log("ComposeTab: instructionsBoxRef.current exists, calling addFileContent");
+            instructionsBoxRef.current.addFileContent(message.file.path, message.content);
+          } else {
+            console.error("ComposeTab: instructionsBoxRef.current is null, cannot call addFileContent");
+          }
+          
+          processedMessagesRef.current.add(messageKey);
+          break;
+          
+        case 'fileUnselected':
+          console.log("ComposeTab: File unselected:", message.path);
+          
+          // Remove the file from the selected files list
+          setSelectedFiles(prev => prev.filter(f => f.path !== message.path));
+          
+          // Set removed file path for InstructionsBox
+          setRemovedFilePath(message.path);
+          
+          // Also try using the ref approach as a backup
+          if (instructionsBoxRef.current) {
+            console.log("ComposeTab: instructionsBoxRef.current exists, calling removeFile");
+            instructionsBoxRef.current.removeFile(message.path);
+          } else {
+            console.error("ComposeTab: instructionsBoxRef.current is null, cannot call removeFile");
+          }
+          
+          processedMessagesRef.current.add(messageKey);
+          break;
+          
         case 'fileContent':
-          console.log("ComposeTab: Received file content for:", message.path);
+          // Keep this for backward compatibility, but it should no longer be used
+          console.log("ComposeTab: Received legacy fileContent for:", message.path);
           // Set current file content for InstructionsBox
           setCurrentFileContent({
             path: message.path,
@@ -96,7 +152,8 @@ const ComposeTab: React.FC = () => {
           break;
           
         case 'fileRemoved':
-          console.log("ComposeTab: File removed:", message.path);
+          // Keep this for backward compatibility, but it should no longer be used
+          console.log("ComposeTab: Received legacy fileRemoved:", message.path);
           // Set removed file path for InstructionsBox
           setRemovedFilePath(message.path);
           
@@ -160,6 +217,20 @@ const ComposeTab: React.FC = () => {
   
   const handleFileDelete = (path: string) => {
     console.log("ComposeTab: Deleting file:", path);
+    
+    // First, remove the file from the selected files list
+    setSelectedFiles(prev => prev.filter(f => f.path !== path));
+    
+    // Then, try to remove the file content from InstructionsBox directly
+    if (instructionsBoxRef.current) {
+      console.log("ComposeTab: Calling removeFile on instructionsBoxRef for path:", path);
+      instructionsBoxRef.current.removeFile(path);
+    }
+    
+    // Also set removedFilePath as a backup mechanism
+    setRemovedFilePath(path);
+    
+    // Finally, send message to extension to uncheck the file
     vscode.postMessage({
       type: 'toggleFileSelection',
       action: 'uncheck',
