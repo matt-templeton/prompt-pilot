@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Collapse, Paper, Typography, IconButton } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -6,93 +6,53 @@ import CloseIcon from '@mui/icons-material/Close';
 import CodeIcon from '@mui/icons-material/Code';
 import { useVSCode } from '../contexts/VSCodeContext';
 
+interface ApiSurfaceInfo {
+  exists: boolean;
+  useApiSurface: boolean;
+  content: string;
+  tokenCount: number | null;
+}
+
 interface FileContentsProps {
   filePath: string;
   content: string;
   onRemove?: (path: string) => void;
   tokenCount?: number | null;
+  apiSurface?: ApiSurfaceInfo;
+  onCheckApiSurface?: (path: string) => void;
 }
 
-const FileContents: React.FC<FileContentsProps> = ({ filePath, content, onRemove, tokenCount }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
-  const vscode = useVSCode();
-  const [apiSurface, setApiSurface] = useState({
+const FileContents: React.FC<FileContentsProps> = ({ 
+  filePath, 
+  content, 
+  onRemove, 
+  tokenCount,
+  apiSurface = {
     exists: false,
     useApiSurface: false,
     content: '',
-    tokenCount: null as number | null
-  });
-  
-  // Add a ref to track processed message IDs
-  const processedMessageIds = useRef<Set<string>>(new Set());
+    tokenCount: null
+  },
+  onCheckApiSurface
+}) => {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const vscode = useVSCode();
   
   // Extract just the filename from the path
   const fileName = filePath.split(/[/\\]/).pop() || filePath;
   
+  // Request API surface check on mount if callback is provided
   useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      const message = event.data;
-      
-      // Skip if no message ID or we've already processed this message
-      if (!message.id) {
-        // For messages without IDs, generate one based on content
-        message.id = `${message.type}:${message.path}:${Date.now()}`;
-      }
-      
-      if (processedMessageIds.current.has(message.id)) {
-        return;
-      }
-      
-      // Mark this message as processed
-      processedMessageIds.current.add(message.id);
-      
-      // Limit the size of the processed messages set
-      if (processedMessageIds.current.size > 100) {
-        // Convert to array, remove oldest entries, convert back to set
-        const messagesArray = Array.from(processedMessageIds.current);
-        processedMessageIds.current = new Set(messagesArray.slice(messagesArray.length - 50));
-      }
-      
-      if (message.type === 'apiSurfaceStatus' && message.path === filePath) {
-        setApiSurface(prev => ({
-          ...prev,
-          exists: message.exists,
-          tokenCount: message.tokens || null
-        }));
-        
-        // If API surface exists, request its content
-        if (message.exists) {
-          vscode.postMessage({
-            type: 'getApiSurfaceContent',
-            path: filePath
-          });
-        }
-      } else if (message.type === 'apiSurfaceContent' && message.path === filePath) {
-        setApiSurface(prev => ({
-          ...prev,
-          content: message.content
-        }));
-      } else if (message.type === 'apiSurfaceUsageChanged' && message.path === filePath) {
-        console.log(`FileContents: Received apiSurfaceUsageChanged for ${filePath}`, message);
-        setApiSurface(prev => ({
-          ...prev,
-          useApiSurface: message.useApiSurface,
-          // Update token count if provided
-          tokenCount: message.tokens !== undefined ? message.tokens : prev.tokenCount
-        }));
-      }
-    };
-
-    window.addEventListener('message', handler);
-    
-    // Check if API surface exists on mount
-    vscode.postMessage({
-      type: 'checkApiSurface',
-      path: filePath
-    });
-    
-    return () => window.removeEventListener('message', handler);
-  }, [filePath, vscode]);
+    if (onCheckApiSurface) {
+      onCheckApiSurface(filePath);
+    } else {
+      // Fallback to direct message if no callback provided
+      vscode.postMessage({
+        type: 'checkApiSurface',
+        path: filePath
+      });
+    }
+  }, [filePath, vscode, onCheckApiSurface]);
   
   const handleToggleExpand = () => {
     setIsExpanded(!isExpanded);

@@ -24,6 +24,13 @@ interface SelectedPath {
   tokenCount?: number | null;
 }
 
+interface ApiSurfaceInfo {
+  exists: boolean;
+  useApiSurface: boolean;
+  content: string;
+  tokenCount: number | null;
+}
+
 const ComposeTab: React.FC = () => {
   const vscode = useVSCode();
   const { selectedModel, setSelectedModel } = useModel();
@@ -31,6 +38,12 @@ const ComposeTab: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<SelectedPath[]>([]);
   const [currentFileContent, setCurrentFileContent] = useState<{ path: string; content: string } | null>(null);
   const [removedFilePath, setRemovedFilePath] = useState<string | null>(null);
+  
+  // New state for centralized message handling
+  const [fileTokens, setFileTokens] = useState<Map<string, number | null>>(new Map());
+  const [totalTokenCount, setTotalTokenCount] = useState<number | null>(null);
+  const [isCountingTokens, setIsCountingTokens] = useState(false);
+  const [apiSurfaceInfoMap, setApiSurfaceInfoMap] = useState<Map<string, ApiSurfaceInfo>>(new Map());
   
   // Refs to child components and tracking processed messages
   const instructionsBoxRef = useRef<InstructionsBoxHandle>(null);
@@ -47,7 +60,6 @@ const ComposeTab: React.FC = () => {
 
     const messageHandler = (event: MessageEvent) => {
       const message = event.data;
-      
       
       // Create a unique key for this message to prevent duplicate processing
       let messageKey = `${message.type}`;
@@ -70,7 +82,6 @@ const ComposeTab: React.FC = () => {
         return;
       }
       
-      
       // Handle different message types
       switch (message.type) {
         case 'models':
@@ -85,7 +96,6 @@ const ComposeTab: React.FC = () => {
           break;
           
         case 'fileSelected':
-          
           // Update the selected files list to include this file
           setSelectedFiles(prev => {
             // Check if this file is already in the list
@@ -195,13 +205,125 @@ const ComposeTab: React.FC = () => {
           processedMessagesRef.current.add(messageKey);
           break;
           
-        case 'apiSurfaceUsageChanged':
-          // Forward this message to the InstructionsBox
-          if (instructionsBoxRef.current) {
-            // The message will be handled by the FileContents components
-            // through the event listener in InstructionsBox
+        case 'fileTokenCount':
+          // Handle file token count updates
+          if (message.path) {
+            setFileTokens(prev => {
+              const newMap = new Map(prev);
+              newMap.set(message.path, message.tokenCount);
+              return newMap;
+            });
           }
+          processedMessagesRef.current.add(messageKey);
+          break;
           
+        case 'instructionsTokenCount':
+          // Handle instructions token count updates
+          setTotalTokenCount(message.tokenCount);
+          setIsCountingTokens(false);
+          processedMessagesRef.current.add(messageKey);
+          break;
+          
+        case 'apiSurfaceStatus':
+          // Handle API surface status updates
+          if (message.path) {
+            console.log("ComposeTab: Received apiSurfaceStatus for", message.path, message);
+            
+            setApiSurfaceInfoMap(prev => {
+              const newMap = new Map(prev);
+              const currentInfo = newMap.get(message.path) || {
+                exists: false,
+                useApiSurface: false,
+                content: '',
+                tokenCount: null
+              };
+              
+              newMap.set(message.path, {
+                ...currentInfo,
+                exists: message.exists,
+                tokenCount: message.tokens || null
+              });
+              
+              return newMap;
+            });
+            
+            // If API surface exists, request its content
+            if (message.exists) {
+              vscode.postMessage({
+                type: 'getApiSurfaceContent',
+                path: message.path
+              });
+            }
+          }
+          processedMessagesRef.current.add(messageKey);
+          break;
+          
+        case 'apiSurfaceContent':
+          // Handle API surface content updates
+          if (message.path) {
+            setApiSurfaceInfoMap(prev => {
+              const newMap = new Map(prev);
+              const currentInfo = newMap.get(message.path) || {
+                exists: true,
+                useApiSurface: false,
+                content: '',
+                tokenCount: null
+              };
+              
+              newMap.set(message.path, {
+                ...currentInfo,
+                content: message.content
+              });
+              
+              return newMap;
+            });
+          }
+          processedMessagesRef.current.add(messageKey);
+          break;
+          
+        case 'apiSurfaceUsageChanged':
+          // Handle API surface usage changes
+          if (message.path) {
+            console.log("ComposeTab: Received apiSurfaceUsageChanged for", message.path, message);
+            
+            // Update API surface info
+            setApiSurfaceInfoMap(prev => {
+              const newMap = new Map(prev);
+              const currentInfo = newMap.get(message.path) || {
+                exists: true,
+                useApiSurface: false,
+                content: '',
+                tokenCount: null
+              };
+              
+              newMap.set(message.path, {
+                ...currentInfo,
+                useApiSurface: message.useApiSurface,
+                tokenCount: message.tokens !== undefined ? message.tokens : currentInfo.tokenCount
+              });
+              
+              return newMap;
+            });
+            
+            // Update file tokens based on whether to use API surface or full file
+            setFileTokens(prev => {
+              const newMap = new Map(prev);
+              
+              // Find the file in selectedFiles to get the appropriate token count
+              const file = selectedFiles.find(f => f.path === message.path);
+              const apiSurfaceInfo = apiSurfaceInfoMap.get(message.path);
+              
+              if (file && apiSurfaceInfo) {
+                if (message.useApiSurface && apiSurfaceInfo.tokenCount !== null) {
+                  newMap.set(message.path, apiSurfaceInfo.tokenCount);
+                } else {
+                  newMap.set(message.path, file.tokenCount ?? null);
+                }
+              }
+              
+              return newMap;
+            });
+          }
           processedMessagesRef.current.add(messageKey);
           break;
           
@@ -212,7 +334,7 @@ const ComposeTab: React.FC = () => {
 
     window.addEventListener('message', messageHandler);
     return () => window.removeEventListener('message', messageHandler);
-  }, [vscode, setSelectedModel]);
+  }, [vscode, setSelectedModel, selectedFiles, apiSurfaceInfoMap]);
 
   // Reset removedFilePath after it's been processed
   useEffect(() => {
@@ -310,6 +432,22 @@ const ComposeTab: React.FC = () => {
       model: model
     });
   };
+  
+  const handleRequestTokenCount = (content: string, model: string) => {
+    setIsCountingTokens(true);
+    vscode.postMessage({
+      type: 'countInstructionsTokens',
+      content: content,
+      model: model
+    });
+  };
+  
+  const handleCheckApiSurface = (path: string) => {
+    vscode.postMessage({
+      type: 'checkApiSurface',
+      path: path
+    });
+  };
 
   return (
     <Box sx={{ 
@@ -329,12 +467,19 @@ const ComposeTab: React.FC = () => {
           ref={instructionsBoxRef}
           fileContent={currentFileContent}
           removedFilePath={removedFilePath}
+          totalTokenCount={totalTokenCount}
+          isCountingTokens={isCountingTokens}
+          fileTokenCounts={fileTokens}
+          onRequestTokenCount={handleRequestTokenCount}
+          onCheckApiSurface={handleCheckApiSurface}
+          apiSurfaceInfoMap={apiSurfaceInfoMap}
         />
         <FileExplorerBox 
           selectedFiles={selectedFiles}
           onFileDelete={handleFileDelete}
           onRequestFiles={handleRequestFiles}
           onModelChange={handleModelChangeWithFiles}
+          fileTokens={fileTokens}
         />
       </Box>
       

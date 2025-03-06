@@ -18,6 +18,19 @@ interface InstructionsBoxProps {
   onRemoveFile?: (path: string) => void;
   fileContent?: { path: string; content: string } | null;
   removedFilePath?: string | null;
+  totalTokenCount?: number | null;
+  isCountingTokens?: boolean;
+  fileTokenCounts?: Map<string, number | null>;
+  onRequestTokenCount?: (content: string, model: string) => void;
+  onCheckApiSurface?: (path: string) => void;
+  apiSurfaceInfoMap?: Map<string, ApiSurfaceInfo>;
+}
+
+interface ApiSurfaceInfo {
+  exists: boolean;
+  useApiSurface: boolean;
+  content: string;
+  tokenCount: number | null;
 }
 
 export interface InstructionsBoxHandle {
@@ -33,14 +46,23 @@ interface ContentBlock {
 }
 
 const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
-  ({ onAddFileContent, onRemoveFile, fileContent, removedFilePath }, ref) => {
+  ({ 
+    onAddFileContent, 
+    onRemoveFile, 
+    fileContent, 
+    removedFilePath,
+    totalTokenCount = null,
+    isCountingTokens = false,
+    fileTokenCounts = new Map(),
+    onRequestTokenCount,
+    onCheckApiSurface,
+    apiSurfaceInfoMap
+  }, ref) => {
     const vscode = useVSCode();
     const { selectedModel } = useModel();
     
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [selectedPrompts, setSelectedPrompts] = useState<string[]>([]);
-    const [totalTokenCount, setTotalTokenCount] = useState<number | null>(null);
-    const [isCountingTokens, setIsCountingTokens] = useState(false);
     
     // Instead of a single text state, we'll use an array of content blocks
     const [contentBlocks, setContentBlocks] = useState<ContentBlock[]>([
@@ -60,13 +82,9 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     const lastFileContentRef = useRef<{ path: string; content: string } | null>(null);
     const lastTokenCountRequestRef = useRef<string>('');
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-    const previousModelRef = useRef<string>(''); // Add ref to track previous model
     
     // Ref for the text input elements
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-    
-    // Add a state to track token counts for individual files
-    const [fileTokenCounts, setFileTokenCounts] = useState<Map<string, number | null>>(new Map());
     
     // Get the combined text content for token counting
     const getCombinedContentForTokenCount = () => {
@@ -98,14 +116,18 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
       }
       
       lastTokenCountRequestRef.current = contentHash;
-      setIsCountingTokens(true);
       
-      vscode.postMessage({
-        type: 'countInstructionsTokens',
-        content: combinedContent,
-        model: selectedModel
-      });
-    }, [contentBlocks, selectedModel, vscode]);
+      if (onRequestTokenCount) {
+        onRequestTokenCount(combinedContent, selectedModel);
+      } else {
+        // Fallback to direct message if no callback provided
+        vscode.postMessage({
+          type: 'countInstructionsTokens',
+          content: combinedContent,
+          model: selectedModel
+        });
+      }
+    }, [contentBlocks, selectedModel, vscode, onRequestTokenCount]);
     
     // Debounced token count request - using useRef for the function to avoid dependency issues
     const debouncedRequestRef = useRef<() => void>(() => {});
@@ -126,37 +148,6 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
       };
     }, [requestTokenCount]);
     
-    // Listen for token count response from the extension
-    useEffect(() => {
-      const handleMessage = (event: MessageEvent) => {
-        const message = event.data;
-        
-        if (message.type === 'instructionsTokenCount') {
-          setTotalTokenCount(message.tokenCount);
-          setIsCountingTokens(false);
-        } else if (message.type === 'fileTokenCount' && message.path) {
-          setFileTokenCounts(prev => {
-            const newMap = new Map(prev);
-            newMap.set(message.path, message.tokenCount);
-            return newMap;
-          });
-        } else if (message.type === 'apiSurfaceUsageChanged' && message.path) {
-          // Don't re-dispatch the message - this is causing an infinite loop
-          // Instead, just update our own state if needed
-          setFileTokenCounts(prev => {
-            const newMap = new Map(prev);
-            if (message.tokens !== undefined) {
-              newMap.set(message.path, message.tokens);
-            }
-            return newMap;
-          });
-        }
-      };
-      
-      window.addEventListener('message', handleMessage);
-      return () => window.removeEventListener('message', handleMessage);
-    }, [selectedModel, vscode]);
-    
     // Request token count when content changes (with debounce)
     useEffect(() => {
       if (selectedModel) {
@@ -170,44 +161,6 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
         }
       };
     }, [contentBlocks, selectedModel]);
-    
-    // Request token count immediately when model changes
-    useEffect(() => {
-      // Only run this effect if the model has actually changed
-      if (selectedModel !== previousModelRef.current) {
-        console.log(`InstructionsBox: Model actually changed from ${previousModelRef.current} to ${selectedModel}, triggering immediate token count`);
-        previousModelRef.current = selectedModel;
-        
-        if (selectedModel) {
-          // Clear any existing timer
-          if (debounceTimerRef.current) {
-            clearTimeout(debounceTimerRef.current);
-          }
-          
-          // Request token count immediately - implement logic directly to avoid dependency on requestTokenCount
-          const combinedContent = getCombinedContentForTokenCount();
-          console.log(`InstructionsBox: Combined content length: ${combinedContent.length}`);
-          
-          // Create a hash of the content to avoid unnecessary requests
-          const contentHash = `${selectedModel}:${combinedContent.length}:${contentBlocks.length}`;
-          
-          // Skip if we've already requested token count for this content
-          if (contentHash !== lastTokenCountRequestRef.current) {
-            console.log(`InstructionsBox: Content changed, requesting token count for hash: ${contentHash}`);
-            lastTokenCountRequestRef.current = contentHash;
-            setIsCountingTokens(true);
-            
-            vscode.postMessage({
-              type: 'countInstructionsTokens',
-              content: combinedContent,
-              model: selectedModel
-            });
-          } else {
-            console.log("InstructionsBox: Content unchanged, skipping token count request");
-          }
-        }
-      }
-    }, [selectedModel, vscode]); // Remove contentBlocks from dependencies
     
     const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
       setAnchorEl(event.currentTarget);
@@ -582,6 +535,8 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
                   content={block.fileInfo.content} 
                   onRemove={removeFile}
                   tokenCount={fileTokenCounts.get(block.fileInfo.path) || null}
+                  apiSurface={apiSurfaceInfoMap?.get(block.fileInfo.path)}
+                  onCheckApiSurface={onCheckApiSurface}
                 />
               ) : null}
             </Box>
