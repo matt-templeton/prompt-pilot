@@ -100,7 +100,8 @@ const ComposeTab: React.FC = () => {
             content: message.content
           });
           
-          // Also try using the ref approach as a backup
+          // Use the ref approach to add file content
+          // This is the only place we should call addFileContent to avoid duplicates
           if (instructionsBoxRef.current) {
             console.log("ComposeTab: instructionsBoxRef.current exists, calling addFileContent");
             instructionsBoxRef.current.addFileContent(message.file.path, message.content);
