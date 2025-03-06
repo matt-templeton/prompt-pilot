@@ -3,7 +3,7 @@ import { Box, Tab, Tabs, ThemeProvider, createTheme } from '@mui/material';
 import './App.css';
 import ComposeTab from './components/ComposeTab';
 import SettingsTab from './components/SettingsTab';
-import { VSCodeProvider } from './contexts/VSCodeContext';
+import { VSCodeProvider, useVSCode } from './contexts/VSCodeContext';
 import { ModelProvider } from './contexts/ModelContext';
 // import PlanTab from './components/PlanTab';
 
@@ -68,10 +68,15 @@ function TabPanel(props: TabPanelProps) {
 function App() {
   console.log("App: Component mounting");
   const [tabValue, setTabValue] = useState(0);
+  const vscodeApi = useVSCode();
 
   useEffect(() => {
     console.log("App: Initial mount effect");
-  }, []);
+    
+    // Send a message to the extension that the webview is ready
+    console.log("App: Sending webviewReady message");
+    vscodeApi.postMessage({ type: 'webviewReady' });
+  }, [vscodeApi]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);

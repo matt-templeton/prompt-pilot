@@ -72,12 +72,25 @@ export class PromptPanelProvider {
                     ...this.panel.state,
                     selectedFiles: filesWithTokens
                 };
+                
+                // First send the selectedFiles message
+                console.log('PromptPanelProvider: Sending selectedFiles message');
+                this.panel.webview.postMessage({
+                    type: 'selectedFiles',
+                    files: filesWithTokens
+                });
+                
+                // Then send file content for each selected file
+                console.log('PromptPanelProvider: Sending file content for selected files');
+                for (const file of files) {
+                    if (!file.isDirectory) {
+                        console.log('PromptPanelProvider: Sending content for file:', file.path);
+                        await this.sendFileContentToWebview(file.path);
+                    }
+                }
+            } else {
+                console.error('PromptPanelProvider: Cannot send messages, panel is undefined');
             }
-
-            this.postMessageToWebview({
-                type: 'selectedFiles',
-                files: filesWithTokens
-            });
         });
     }
 
@@ -133,17 +146,40 @@ export class PromptPanelProvider {
                 console.log("PromptPanelProvider: Received message from webview:", message);
                 try {
                     switch (message.type) {
-                        case 'webviewReady':
+                        case 'webviewReady': {
                             console.log("PromptPanelProvider: Webview reported ready");
+                            
+                            // Send file content for all selected files when the webview is ready
+                            const selectedFiles = this.fileTreeProvider.getSelectedFiles();
+                            console.log("PromptPanelProvider: Sending content for selected files on webview ready:", selectedFiles);
+                            
+                            // Send file content for each selected file
+                            for (const file of selectedFiles) {
+                                if (!file.isDirectory) {
+                                    await this.sendFileContentToWebview(file.path);
+                                }
+                            }
+                            
                             break;
+                        }
                         case 'getSelectedFiles': {
                             console.log("PromptPanelProvider: Handling getSelectedFiles request");
                             const files = this.fileTreeProvider.getSelectedFiles();
                             console.log("PromptPanelProvider: Sending selected files to webview:", files);
+                            
+                            // Send the selected files list first
                             this.panel?.webview.postMessage({
                                 type: 'selectedFiles',
                                 files: files
                             });
+                            
+                            // Then send the content of each file
+                            for (const file of files) {
+                                if (!file.isDirectory) {
+                                    await this.sendFileContentToWebview(file.path);
+                                }
+                            }
+                            
                             break;
                         }
                         case 'getSettings': {
@@ -165,11 +201,23 @@ export class PromptPanelProvider {
                             if (message.action === 'uncheck') {
                                 // Handle uncheck action
                                 await this.fileTreeProvider.uncheckItemByPath(message.file);
+                                
+                                // Send a message to the webview that the file was removed
+                                this.panel?.webview.postMessage({
+                                    type: 'fileRemoved',
+                                    path: message.file
+                                });
                             } else {
                                 // Handle regular toggle
                                 vscode.commands.executeCommand('promptRepo.toggleSelection', {
                                     resourceUri: vscode.Uri.file(message.file)
                                 });
+                                
+                                // If this is a file (not a directory), send its content to the webview
+                                const stats = await vscode.workspace.fs.stat(vscode.Uri.file(message.file));
+                                if (stats.type === vscode.FileType.File) {
+                                    await this.sendFileContentToWebview(message.file);
+                                }
                             }
                             break;
                         }
@@ -314,6 +362,13 @@ export class PromptPanelProvider {
                     type: 'selectedFiles',
                     files: filesWithTokens
                 });
+                
+                // Send file content for each selected file
+                for (const file of selectedFiles) {
+                    if (!file.isDirectory) {
+                        await this.sendFileContentToWebview(file.path);
+                    }
+                }
             }
         }, null, this.context.subscriptions);
 
@@ -536,6 +591,32 @@ export class PromptPanelProvider {
                 exists: false,
                 error: 'Failed to extract API surface'
             });
+        }
+    }
+
+    private async sendFileContentToWebview(filePath: string): Promise<void> {
+        console.log('PromptPanelProvider: Sending file content to webview for path:', filePath);
+        try {
+            const content = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
+            const text = new TextDecoder().decode(content);
+            console.log('PromptPanelProvider: Read file content, length:', text.length);
+            
+            if (!this.panel) {
+                console.error('PromptPanelProvider: Cannot send file content, panel is undefined');
+                return;
+            }
+            
+            // Use direct webview.postMessage instead of postMessageToWebview
+            // to ensure the message type is preserved
+            console.log('PromptPanelProvider: Posting fileContent message directly to webview');
+            this.panel.webview.postMessage({
+                type: 'fileContent',
+                path: filePath,
+                content: text
+            });
+            console.log('PromptPanelProvider: Posted fileContent message to webview');
+        } catch (error) {
+            console.error('Error reading file content:', error);
         }
     }
 } 

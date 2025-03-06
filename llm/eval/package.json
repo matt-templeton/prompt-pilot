@@ -7,11 +7,19 @@
     "test": "jest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.37.0",
     "@types/yaml": "^1.9.6",
     "dotenv": "^16.4.1",
     "langchain": "^0.3.19",
     "minimist": "^1.2.8",
     "openai": "^4.26.0",
+    "tree-sitter": "^0.22.4",
+    "tree-sitter-c": "^0.23.5",
+    "tree-sitter-c-sharp": "^0.23.1",
+    "tree-sitter-cpp": "^0.23.4",
+    "tree-sitter-javascript": "^0.23.1",
+    "tree-sitter-python": "^0.23.6",
+    "tree-sitter-typescript": "^0.23.2",
     "yaml": "^2.7.0",
     "zod": "^3.22.4"
   },

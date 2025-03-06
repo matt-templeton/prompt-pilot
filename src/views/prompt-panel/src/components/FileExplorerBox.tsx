@@ -1,4 +1,4 @@
-import React, { useEffect, useState, memo, useRef } from 'react';
+import React, { useState, memo, useRef, useEffect } from 'react';
 import { Box, Paper, Typography } from '@mui/material';
 import Directory from './Directory';
 import { useVSCode } from '../contexts/VSCodeContext';
@@ -12,7 +12,19 @@ interface SelectedPath {
   tokenCount?: number | null;
 }
 
-const FileExplorerBox: React.FC = () => {
+interface FileExplorerBoxProps {
+  selectedFiles?: SelectedPath[];
+  onFileDelete?: (path: string) => void;
+  onRequestFiles?: () => void;
+  onModelChange?: (model: string, files: SelectedPath[]) => void;
+}
+
+const FileExplorerBox: React.FC<FileExplorerBoxProps> = ({ 
+  selectedFiles = [], 
+  onFileDelete,
+  onRequestFiles,
+  onModelChange
+}) => {
   const vscodeApi = useVSCode();
   const { selectedModel } = useModel();
   const [directoryMap, setDirectoryMap] = useState<DirectoryMap>({});
@@ -20,6 +32,14 @@ const FileExplorerBox: React.FC = () => {
   const [fileTokens, setFileTokens] = useState<Map<string, number | null>>(new Map());
   const hasRequestedFiles = useRef(false);
   const currentFiles = useRef<SelectedPath[]>([]);
+
+  // Process selected files when they change
+  useEffect(() => {
+    if (selectedFiles && selectedFiles.length > 0) {
+      console.log("FileExplorerBox: Processing selected files:", selectedFiles);
+      handleSelectedFilesUpdate(selectedFiles);
+    }
+  }, [selectedFiles]);
 
   const handleSelectedFilesUpdate = (files: SelectedPath[]) => {
     console.log("FileExplorerBox: Starting files update with:", files);
@@ -64,58 +84,36 @@ const FileExplorerBox: React.FC = () => {
     });
   };
 
-  // Handle file selection messages
+  // Request files on mount
   useEffect(() => {
-    console.log("FileExplorerBox: Setting up message handler");
-
-    const messageHandler = (event: MessageEvent) => {
-      console.log("FileExplorerBox: Raw message event:", event);
-      const message = event.data;
-      console.log("FileExplorerBox: Parsed message:", message);
-      
-      if (message.type === 'selectedFiles') {
-        console.log("FileExplorerBox: Handling selectedFiles message:", message.files);
-        handleSelectedFilesUpdate(message.files);
-      }
-    };
-
-    window.addEventListener('message', messageHandler);
-    
-    // Only request files once on mount
-    if (!hasRequestedFiles.current) {
+    if (!hasRequestedFiles.current && onRequestFiles) {
       console.log("FileExplorerBox: Making initial files request");
-      vscodeApi.postMessage({ 
-          type: 'getSelectedFiles',
-          action: 'get'
-      });
+      onRequestFiles();
       hasRequestedFiles.current = true;
     }
-
-    return () => {
-      window.removeEventListener('message', messageHandler);
-    };
-  }, [vscodeApi]);
+  }, [onRequestFiles]);
 
   // Handle model changes
   useEffect(() => {
     console.log("FileExplorerBox: Model changed to:", selectedModel);
-    if (selectedModel && currentFiles.current.length > 0) {
-        console.log("FileExplorerBox: Requesting retokenization for files:", currentFiles.current);
-        vscodeApi.postMessage({
-            type: 'selectedFiles',
-            action: 'update',
-            files: currentFiles.current,
-            model: selectedModel
-        });
+    if (selectedModel && currentFiles.current.length > 0 && onModelChange) {
+      console.log("FileExplorerBox: Requesting retokenization for files:", currentFiles.current);
+      onModelChange(selectedModel, currentFiles.current);
     }
-  }, [selectedModel, vscodeApi]);
+  }, [selectedModel, onModelChange]);
 
   const handleFileDelete = (fileToDelete: string) => {
-    vscodeApi.postMessage({
-      type: 'toggleFileSelection',
-      action: 'uncheck',
-      file: fileToDelete
-    });
+    console.log("FileExplorerBox: Deleting file:", fileToDelete);
+    if (onFileDelete) {
+      onFileDelete(fileToDelete);
+    } else {
+      // Fallback to direct message if no callback provided
+      vscodeApi.postMessage({
+        type: 'toggleFileSelection',
+        action: 'uncheck',
+        file: fileToDelete
+      });
+    }
   };
 
   const toggleDirectory = (directory: string) => {
