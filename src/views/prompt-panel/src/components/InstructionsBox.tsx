@@ -83,6 +83,54 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
     const lastTokenCountRequestRef = useRef<string>('');
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
     
+    // Debug logging for apiSurfaceInfoMap changes
+    useEffect(() => {
+      if (apiSurfaceInfoMap) {
+        console.log("InstructionsBox: apiSurfaceInfoMap updated:", 
+          Array.from(apiSurfaceInfoMap.entries()).map(([path, info]) => ({
+            path,
+            useApiSurface: info.useApiSurface,
+            tokenCount: info.tokenCount,
+            hasContent: !!info.content
+          }))
+        );
+        
+        // Update content blocks when apiSurfaceInfoMap changes
+        setContentBlocks(prevBlocks => {
+          // Only update blocks if there are changes to file blocks
+          const hasFileBlocks = prevBlocks.some(block => block.type === 'file');
+          if (!hasFileBlocks) {
+            return prevBlocks;
+          }
+          
+          let hasChanges = false;
+          const updatedBlocks = prevBlocks.map(block => {
+            if (block.type === 'file' && block.fileInfo) {
+              const apiSurfaceInfo = apiSurfaceInfoMap.get(block.fileInfo.path);
+              if (apiSurfaceInfo) {
+                console.log(`InstructionsBox: Checking file block for ${block.fileInfo.path}`, {
+                  useApiSurface: apiSurfaceInfo.useApiSurface,
+                  hasApiContent: !!apiSurfaceInfo.content,
+                  contentLength: apiSurfaceInfo.content ? apiSurfaceInfo.content.length : 0
+                });
+                
+                // Force update the block to ensure FileContents gets the latest apiSurfaceInfo
+                hasChanges = true;
+                return {
+                  ...block,
+                  // Add a timestamp to force React to see this as a new object
+                  _updateTimestamp: Date.now()
+                };
+              }
+            }
+            return block;
+          });
+          
+          return hasChanges ? updatedBlocks : prevBlocks;
+        });
+      }
+    }, [apiSurfaceInfoMap]);
+    
     // Ref for the text input elements
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
     
@@ -115,6 +163,7 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
         return;
       }
       
+      console.log("InstructionsBox: Requesting token count for content length:", combinedContent.length);
       lastTokenCountRequestRef.current = contentHash;
       
       if (onRequestTokenCount) {
@@ -161,6 +210,15 @@ const InstructionsBox = forwardRef<InstructionsBoxHandle, InstructionsBoxProps>(
         }
       };
     }, [contentBlocks, selectedModel]);
+    
+    // Log when token count props change
+    useEffect(() => {
+      console.log("InstructionsBox: isCountingTokens changed to:", isCountingTokens);
+    }, [isCountingTokens]);
+    
+    useEffect(() => {
+      console.log("InstructionsBox: totalTokenCount changed to:", totalTokenCount);
+    }, [totalTokenCount]);
     
     const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
       setAnchorEl(event.currentTarget);

@@ -74,6 +74,9 @@ const ComposeTab: React.FC = () => {
           .map((file: SelectedPath) => `${file.path}:${file.tokenCount}`)
           .join('|');
         messageKey += `:${tokenCountsHash}`;
+      } else if (message.type === 'instructionsTokenCount' && message.tokenCount !== undefined) {
+        // For instructionsTokenCount messages, include the token count in the key
+        messageKey += `:${message.tokenCount}`;
       }
       if (message.content) {messageKey += `:${message.content.length}`;}
       
@@ -219,6 +222,7 @@ const ComposeTab: React.FC = () => {
           
         case 'instructionsTokenCount':
           // Handle instructions token count updates
+          console.log("ComposeTab: Received instructionsTokenCount message:", message.tokenCount);
           setTotalTokenCount(message.tokenCount);
           setIsCountingTokens(false);
           processedMessagesRef.current.add(messageKey);
@@ -261,6 +265,10 @@ const ComposeTab: React.FC = () => {
         case 'apiSurfaceContent':
           // Handle API surface content updates
           if (message.path) {
+            console.log("ComposeTab: Received apiSurfaceContent for", message.path, {
+              contentLength: message.content ? message.content.length : 0
+            });
+            
             setApiSurfaceInfoMap(prev => {
               const newMap = new Map(prev);
               const currentInfo = newMap.get(message.path) || {
@@ -270,10 +278,18 @@ const ComposeTab: React.FC = () => {
                 tokenCount: null
               };
               
-              newMap.set(message.path, {
+              const updatedInfo = {
                 ...currentInfo,
                 content: message.content
+              };
+              
+              console.log("ComposeTab: Updating apiSurfaceInfoMap content for", message.path, {
+                useApiSurface: updatedInfo.useApiSurface,
+                hasContent: !!updatedInfo.content,
+                contentLength: updatedInfo.content ? updatedInfo.content.length : 0
               });
+              
+              newMap.set(message.path, updatedInfo);
               
               return newMap;
             });
@@ -286,6 +302,9 @@ const ComposeTab: React.FC = () => {
           if (message.path) {
             console.log("ComposeTab: Received apiSurfaceUsageChanged for", message.path, message);
             
+            // Find the file in selectedFiles to get the appropriate token count
+            const file = selectedFiles.find(f => f.path === message.path);
+            
             // Update API surface info
             setApiSurfaceInfoMap(prev => {
               const newMap = new Map(prev);
@@ -296,30 +315,42 @@ const ComposeTab: React.FC = () => {
                 tokenCount: null
               };
               
-              newMap.set(message.path, {
+              // Determine the correct token count to use
+              let tokenCount = message.tokens;
+              if (tokenCount === undefined || tokenCount === null) {
+                // If no tokens provided in the message, use the existing token count
+                tokenCount = currentInfo.tokenCount;
+              }
+              
+              const updatedInfo = {
                 ...currentInfo,
                 useApiSurface: message.useApiSurface,
-                tokenCount: message.tokens !== undefined ? message.tokens : currentInfo.tokenCount
+                tokenCount: tokenCount
+              };
+              
+              console.log("ComposeTab: Updating apiSurfaceInfoMap for", message.path, {
+                useApiSurface: updatedInfo.useApiSurface,
+                tokenCount: updatedInfo.tokenCount,
+                originalTokens: message.tokens
               });
               
-              return newMap;
-            });
-            
-            // Update file tokens based on whether to use API surface or full file
-            setFileTokens(prev => {
-              const newMap = new Map(prev);
+              newMap.set(message.path, updatedInfo);
               
-              // Find the file in selectedFiles to get the appropriate token count
-              const file = selectedFiles.find(f => f.path === message.path);
-              const apiSurfaceInfo = apiSurfaceInfoMap.get(message.path);
-              
-              if (file && apiSurfaceInfo) {
-                if (message.useApiSurface && apiSurfaceInfo.tokenCount !== null) {
-                  newMap.set(message.path, apiSurfaceInfo.tokenCount);
-                } else {
-                  newMap.set(message.path, file.tokenCount ?? null);
+              // Update file tokens based on whether to use API surface or full file
+              // We do this inside the apiSurfaceInfoMap setter to ensure we have the latest values
+              setFileTokens(prevTokens => {
+                const newTokensMap = new Map(prevTokens);
+                
+                if (file) {
+                  if (message.useApiSurface && updatedInfo.tokenCount !== null) {
+                    newTokensMap.set(message.path, updatedInfo.tokenCount);
+                  } else {
+                    newTokensMap.set(message.path, file.tokenCount ?? null);
+                  }
                 }
-              }
+                
+                return newTokensMap;
+              });
               
               return newMap;
             });
@@ -434,6 +465,7 @@ const ComposeTab: React.FC = () => {
   };
   
   const handleRequestTokenCount = (content: string, model: string) => {
+    console.log("ComposeTab: Requesting token count for model:", model, "content length:", content.length);
     setIsCountingTokens(true);
     vscode.postMessage({
       type: 'countInstructionsTokens',

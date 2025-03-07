@@ -76,6 +76,16 @@ const FileContents: React.FC<FileContentsProps> = ({
   const displayContent = apiSurface.useApiSurface && apiSurface.content ? apiSurface.content : content;
   const displayTokenCount = apiSurface.useApiSurface ? apiSurface.tokenCount : tokenCount;
   
+  // Debug logging for token count display
+  useEffect(() => {
+    console.log(`FileContents: Display token count for ${fileName}:`, {
+      useApiSurface: apiSurface.useApiSurface,
+      apiSurfaceTokens: apiSurface.tokenCount,
+      fullTokenCount: tokenCount,
+      displayTokenCount
+    });
+  }, [apiSurface.useApiSurface, apiSurface.tokenCount, tokenCount, fileName, displayTokenCount]);
+  
   return (
     <Paper 
       variant="outlined" 
@@ -121,20 +131,18 @@ const FileContents: React.FC<FileContentsProps> = ({
         </Typography>
         
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          {/* Token count display */}
-          {displayTokenCount !== null && (
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                mr: 1,
-                color: headerTextColor,
-                opacity: 0.8,
-                fontSize: '0.7rem'
-              }}
-            >
-              {displayTokenCount} tokens
-            </Typography>
-          )}
+          {/* Token count display - Show either token count or "Calculating..." */}
+          <Typography 
+            variant="caption" 
+            sx={{ 
+              mr: 1,
+              color: headerTextColor,
+              opacity: 0.8,
+              fontSize: '0.7rem'
+            }}
+          >
+            {displayTokenCount !== null ? `${displayTokenCount} tokens` : 'Calculating...'}
+          </Typography>
           
           {onRemove && (
             <IconButton 
