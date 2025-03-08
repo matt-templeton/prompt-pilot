@@ -42,18 +42,19 @@ const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
     const handler = (event: MessageEvent) => {
       const message = event.data;
       
-      // Skip if no message ID or we've already processed this message
-      if (!message.id) {
-        // For messages without IDs, generate one based on content
-        message.id = `${message.type}:${message.path}:${Date.now()}`;
+      // Skip if no message or no type
+      if (!message || !message.type) {
+        return;
       }
       
-      if (processedMessageIds.current.has(message.id)) {
+      // Skip if this message has already been processed (using ID if available)
+      const messageId = message.id || `${message.type}:${message.path}`;
+      if (processedMessageIds.current.has(messageId)) {
         return;
       }
       
       // Mark this message as processed
-      processedMessageIds.current.add(message.id);
+      processedMessageIds.current.add(messageId);
       
       // Limit the size of the processed messages set
       if (processedMessageIds.current.size > 100) {
@@ -76,18 +77,46 @@ const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
       // Handle API surface usage changes
       else if (message.type === 'apiSurfaceUsageChanged' && message.path === path) {
         console.log(`FilePill: Received apiSurfaceUsageChanged for ${path}`, message);
-        setApiSurface(prev => ({
-          ...prev,
-          useApiSurface: message.useApiSurface,
-          // Update token count if provided
-          apiSurfaceTokens: message.tokens !== undefined ? message.tokens : prev.apiSurfaceTokens
-        }));
+        
+        // Log the current state before update
+        console.log(`FilePill: Before update - useApiSurface: ${apiSurface.useApiSurface}, tokens: ${message.tokens}`);
+        
+        setApiSurface(prev => {
+          // IMPORTANT: Don't update apiSurfaceTokens if tokens is null and we already have a value
+          const newState = {
+            ...prev,
+            useApiSurface: message.useApiSurface,
+            // Only update token count if provided and not null, otherwise keep existing value
+            apiSurfaceTokens: (message.tokens !== undefined && message.tokens !== null) 
+              ? message.tokens 
+              : prev.apiSurfaceTokens
+          };
+          
+          console.log(`FilePill: After update - useApiSurface: ${newState.useApiSurface}, tokens: ${newState.apiSurfaceTokens}`);
+          return newState;
+        });
+      }
+      
+      // Handle file token count updates
+      else if (message.type === 'fileTokenCount' && message.path === path) {
+        console.log(`FilePill: Received fileTokenCount for ${path}`, message);
+        // This is handled by the parent component through props, but we can log it
       }
     };
 
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, [path]);
+
+  // Add a useEffect to log when tokenCount prop changes
+  React.useEffect(() => {
+    console.log(`FilePill: tokenCount prop changed for ${path}:`, tokenCount);
+  }, [tokenCount, path]);
+
+  // Add a useEffect to log when apiSurface state changes
+  React.useEffect(() => {
+    console.log(`FilePill: apiSurface state changed for ${path}:`, apiSurface);
+  }, [apiSurface, path]);
 
   const handleExtractClick = () => {
     setApiSurface(prev => ({ ...prev, isExtracting: true }));
@@ -102,8 +131,21 @@ const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
     console.log(`FilePill: Toggle API surface usage for ${path} to ${useApiSurface}`);
     console.log(`FilePill: Current token counts - Full: ${tokenCount}, API Surface: ${apiSurface.apiSurfaceTokens}`);
     
-    setApiSurface(prev => ({ ...prev, useApiSurface }));
+    // Update local state immediately for responsive UI
+    setApiSurface(prev => {
+      // When toggling, make sure we have the correct token counts
+      const newState = { 
+        ...prev, 
+        useApiSurface,
+        // Make sure we preserve the API surface token count
+        apiSurfaceTokens: prev.apiSurfaceTokens !== null ? prev.apiSurfaceTokens : tokenCount
+      };
+      
+      console.log(`FilePill: Immediately updating local state - useApiSurface: ${newState.useApiSurface}, apiSurfaceTokens: ${newState.apiSurfaceTokens}`);
+      return newState;
+    });
     
+    // Send message to backend
     vscode.postMessage({
       type: 'toggleApiSurfaceUsage',
       path,
@@ -115,7 +157,9 @@ const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
   const filename = path.split(/[/\\]/).pop() || path;
   
   // Determine which token count to show
-  const displayTokenCount = apiSurface.useApiSurface ? apiSurface.apiSurfaceTokens : tokenCount;
+  const displayTokenCount = apiSurface.useApiSurface && apiSurface.apiSurfaceTokens !== null 
+    ? apiSurface.apiSurfaceTokens 
+    : tokenCount;
   
   // Debug logging for token count display
   React.useEffect(() => {
@@ -125,7 +169,7 @@ const FilePill: React.FC<FilePillProps> = ({ path, onDelete, tokenCount }) => {
       fullTokenCount: tokenCount,
       displayTokenCount
     });
-  }, [apiSurface.useApiSurface, apiSurface.apiSurfaceTokens, tokenCount, filename]);
+  }, [apiSurface.useApiSurface, apiSurface.apiSurfaceTokens, tokenCount, filename, displayTokenCount]);
 
   return (
     <Chip

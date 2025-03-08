@@ -262,41 +262,6 @@ const ComposeTab: React.FC = () => {
           processedMessagesRef.current.add(messageKey);
           break;
           
-        case 'apiSurfaceContent':
-          // Handle API surface content updates
-          if (message.path) {
-            console.log("ComposeTab: Received apiSurfaceContent for", message.path, {
-              contentLength: message.content ? message.content.length : 0
-            });
-            
-            setApiSurfaceInfoMap(prev => {
-              const newMap = new Map(prev);
-              const currentInfo = newMap.get(message.path) || {
-                exists: true,
-                useApiSurface: false,
-                content: '',
-                tokenCount: null
-              };
-              
-              const updatedInfo = {
-                ...currentInfo,
-                content: message.content
-              };
-              
-              console.log("ComposeTab: Updating apiSurfaceInfoMap content for", message.path, {
-                useApiSurface: updatedInfo.useApiSurface,
-                hasContent: !!updatedInfo.content,
-                contentLength: updatedInfo.content ? updatedInfo.content.length : 0
-              });
-              
-              newMap.set(message.path, updatedInfo);
-              
-              return newMap;
-            });
-          }
-          processedMessagesRef.current.add(messageKey);
-          break;
-          
         case 'apiSurfaceUsageChanged':
           // Handle API surface usage changes
           if (message.path) {
@@ -304,6 +269,7 @@ const ComposeTab: React.FC = () => {
             
             // Find the file in selectedFiles to get the appropriate token count
             const file = selectedFiles.find(f => f.path === message.path);
+            console.log("ComposeTab: Found file in selectedFiles:", file);
             
             // Update API surface info
             setApiSurfaceInfoMap(prev => {
@@ -320,6 +286,7 @@ const ComposeTab: React.FC = () => {
               if (tokenCount === undefined || tokenCount === null) {
                 // If no tokens provided in the message, use the existing token count
                 tokenCount = currentInfo.tokenCount;
+                console.log("ComposeTab: No tokens in message, using existing token count:", tokenCount);
               }
               
               const updatedInfo = {
@@ -343,15 +310,50 @@ const ComposeTab: React.FC = () => {
                 
                 if (file) {
                   if (message.useApiSurface && updatedInfo.tokenCount !== null) {
+                    console.log(`ComposeTab: Setting token count for ${message.path} to API surface tokens:`, updatedInfo.tokenCount);
                     newTokensMap.set(message.path, updatedInfo.tokenCount);
+                  } else if (!message.useApiSurface && file.tokenCount !== undefined) {
+                    console.log(`ComposeTab: Setting token count for ${message.path} to file tokens:`, file.tokenCount);
+                    newTokensMap.set(message.path, file.tokenCount);
                   } else {
+                    console.log(`ComposeTab: No valid token count available for ${message.path}, using:`, file.tokenCount ?? null);
                     newTokensMap.set(message.path, file.tokenCount ?? null);
                   }
                 }
                 
+                // Log the updated token map
+                console.log("ComposeTab: Updated fileTokens map:", Array.from(newTokensMap.entries()));
+                
                 return newTokensMap;
               });
               
+              return newMap;
+            });
+          }
+          processedMessagesRef.current.add(messageKey);
+          break;
+          
+        case 'apiSurfaceContent':
+          // Handle API surface content updates
+          if (message.path && message.content) {
+            console.log("ComposeTab: Received apiSurfaceContent for", message.path);
+            
+            setApiSurfaceInfoMap(prev => {
+              const newMap = new Map(prev);
+              const currentInfo = newMap.get(message.path) || {
+                exists: true,
+                useApiSurface: false,
+                content: '',
+                tokenCount: null
+              };
+              
+              const updatedInfo = {
+                ...currentInfo,
+                content: message.content,
+                exists: true
+              };
+              
+              newMap.set(message.path, updatedInfo);
               return newMap;
             });
           }
@@ -415,6 +417,26 @@ const ComposeTab: React.FC = () => {
       return newFiles;
     });
     
+    // Remove the file from fileTokens map
+    setFileTokens(prev => {
+      const newMap = new Map(prev);
+      if (newMap.has(path)) {
+        console.log(`ComposeTab: Removing ${path} from fileTokens map`);
+        newMap.delete(path);
+      }
+      return newMap;
+    });
+    
+    // Remove the file from apiSurfaceInfoMap
+    setApiSurfaceInfoMap(prev => {
+      const newMap = new Map(prev);
+      if (newMap.has(path)) {
+        console.log(`ComposeTab: Removing ${path} from apiSurfaceInfoMap`);
+        newMap.delete(path);
+      }
+      return newMap;
+    });
+    
     // Then, try to remove the file content from InstructionsBox directly
     if (instructionsBoxRef.current) {
       console.log("ComposeTab: Removing file from InstructionsBox via ref");
@@ -475,10 +497,31 @@ const ComposeTab: React.FC = () => {
   };
   
   const handleCheckApiSurface = (path: string) => {
+    console.log("ComposeTab: Checking API surface for", path);
+    
+    // Check if we already have API surface info for this path
+    const existingInfo = apiSurfaceInfoMap.get(path);
+    
+    // If we already have the info and it exists, no need to check again
+    if (existingInfo && existingInfo.exists && existingInfo.content) {
+      console.log("ComposeTab: Already have API surface info for", path);
+      return;
+    }
+    
+    // Request API surface check from extension
     vscode.postMessage({
       type: 'checkApiSurface',
       path: path
     });
+    
+    // If API surface exists but we don't have the content, request it
+    if (existingInfo && existingInfo.exists && !existingInfo.content) {
+      console.log("ComposeTab: API surface exists but no content, requesting content for", path);
+      vscode.postMessage({
+        type: 'getApiSurfaceContent',
+        path: path
+      });
+    }
   };
 
   return (

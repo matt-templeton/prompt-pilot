@@ -54,6 +54,56 @@ const FileContents: React.FC<FileContentsProps> = ({
     }
   }, [filePath, vscode, onCheckApiSurface]);
   
+  // Add a listener for API surface content updates
+  useEffect(() => {
+    const processedMessageIds = new Set<string>();
+    
+    const handleMessage = (event: MessageEvent) => {
+      const message = event.data;
+      
+      // Skip if no message or no type
+      if (!message || !message.type) {
+        return;
+      }
+      
+      // Skip if this message has already been processed (using ID if available)
+      const messageId = message.id || `${message.type}:${message.path}`;
+      if (processedMessageIds.has(messageId)) {
+        return;
+      }
+      
+      // Mark this message as processed
+      processedMessageIds.add(messageId);
+      
+      // Limit the size of the processed messages set
+      if (processedMessageIds.size > 100) {
+        // Convert to array, remove oldest entries, convert back to set
+        const messagesArray = Array.from(processedMessageIds);
+        processedMessageIds.clear();
+        messagesArray.slice(messagesArray.length - 50).forEach(id => processedMessageIds.add(id));
+      }
+      
+      // Handle API surface content updates
+      if (message.type === 'apiSurfaceContent' && message.path === filePath) {
+        console.log(`FileContents: Received apiSurfaceContent for ${filePath}`, message);
+        // This is handled by the parent component through props, but we can log it
+      }
+    };
+    
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [filePath]);
+  
+  // Log when apiSurface prop changes
+  useEffect(() => {
+    console.log(`FileContents: apiSurface prop changed for ${fileName}:`, apiSurface);
+  }, [apiSurface, fileName]);
+  
+  // Log when content prop changes
+  useEffect(() => {
+    console.log(`FileContents: content prop changed for ${fileName}, length: ${content.length}`);
+  }, [content, fileName]);
+  
   const handleToggleExpand = () => {
     setIsExpanded(!isExpanded);
   };
@@ -74,7 +124,9 @@ const FileContents: React.FC<FileContentsProps> = ({
   
   // Determine which content and token count to display
   const displayContent = apiSurface.useApiSurface && apiSurface.content ? apiSurface.content : content;
-  const displayTokenCount = apiSurface.useApiSurface ? apiSurface.tokenCount : tokenCount;
+  const displayTokenCount = apiSurface.useApiSurface && apiSurface.tokenCount !== null 
+    ? apiSurface.tokenCount 
+    : tokenCount;
   
   // Debug logging for token count display
   useEffect(() => {

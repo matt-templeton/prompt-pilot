@@ -34,7 +34,12 @@ interface WebviewMessage {
 
 interface WebviewPanelState {
     selectedModel: string;
-    selectedFiles: { path: string; isDirectory: boolean; tokenCount: number | null }[];
+    selectedFiles: { 
+        path: string; 
+        isDirectory: boolean; 
+        tokenCount: number | null;
+        apiSurfaceTokenCount?: number | null;
+    }[];
 }
 
 interface VSCodeWebviewPanel extends vscode.WebviewPanel {
@@ -371,6 +376,23 @@ export class PromptPanelProvider {
                                 const enc = encoding_for_model('gpt-4');
                                 const tokens = enc.encode(JSON.stringify(surface)).length;
                                 enc.free();
+                                
+                                // Store the API surface token count in the panel state for later use
+                                if (this.panel && this.panel.state && this.panel.state.selectedFiles) {
+                                    const fileIndex = this.panel.state.selectedFiles.findIndex(f => f.path === message.path);
+                                    if (fileIndex >= 0) {
+                                        // Create a new array to avoid mutating the state directly
+                                        const updatedFiles = [...this.panel.state.selectedFiles];
+                                        // Add the API surface token count to the file
+                                        updatedFiles[fileIndex] = {
+                                            ...updatedFiles[fileIndex],
+                                            apiSurfaceTokenCount: tokens
+                                        };
+                                        // Update the panel state
+                                        this.panel.state.selectedFiles = updatedFiles;
+                                        console.log(`PromptPanelProvider: Stored API surface token count ${tokens} for ${message.path} in panel state`);
+                                    }
+                                }
                                 
                                 this.panel?.webview.postMessage({
                                     type: 'apiSurfaceStatus',
@@ -815,29 +837,101 @@ export class PromptPanelProvider {
             
             // Find the file in the selected files
             const fileIndex = selectedFiles.findIndex(f => f.path === path);
+            console.log(`PromptPanelProvider: File index in selectedFiles: ${fileIndex}`);
             
             if (fileIndex >= 0) {
-                // Get the API surface token count
-                let apiSurfaceTokens: number | null = null;
+                // Get the token count based on the toggle state
+                let tokens: number | null = null;
                 
                 if (useApiSurface) {
-                    const surface = await this.storageManager.getApiSurface(path);
-                    if (surface) {
-                        const tokenizerType = this.getTokenizerType(this.selectedModel);
-                        const surfaceText = JSON.stringify(surface);
-                        
-                        if (tokenizerType === 'openai') {
-                            const enc = encoding_for_model(this.selectedModel as TiktokenModel);
-                            apiSurfaceTokens = enc.encode(surfaceText).length;
-                            enc.free();
-                        } else if (tokenizerType === 'anthropic') {
-                            apiSurfaceTokens = await this.countAnthropicTokens(surfaceText, this.selectedModel);
+                    // First check if we already have the API surface token count in the panel state
+                    if (selectedFiles[fileIndex].apiSurfaceTokenCount !== undefined && 
+                        selectedFiles[fileIndex].apiSurfaceTokenCount !== null) {
+                        tokens = selectedFiles[fileIndex].apiSurfaceTokenCount;
+                        console.log(`PromptPanelProvider: Using stored API surface token count: ${tokens}`);
+                    } else {
+                        // Get API surface token count when toggling ON
+                        const surface = await this.storageManager.getApiSurface(path);
+                        if (surface) {
+                            // Calculate the token count directly here
+                            const surfaceText = JSON.stringify(surface);
+                            const tokenizerType = this.getTokenizerType(this.selectedModel);
+                            
+                            try {
+                                if (tokenizerType === 'openai') {
+                                    const enc = encoding_for_model(this.selectedModel as TiktokenModel);
+                                    tokens = enc.encode(surfaceText).length;
+                                    enc.free();
+                                } else if (tokenizerType === 'anthropic') {
+                                    tokens = await this.countAnthropicTokens(surfaceText, this.selectedModel);
+                                }
+                                
+                                // If we still don't have tokens, use a fallback method
+                                if (tokens === null) {
+                                    const enc = encoding_for_model('gpt-4');
+                                    tokens = enc.encode(surfaceText).length;
+                                    enc.free();
+                                }
+                                
+                                // Store the token count in the panel state for future use
+                                if (tokens !== null) {
+                                    const updatedFiles = [...selectedFiles];
+                                    updatedFiles[fileIndex] = {
+                                        ...updatedFiles[fileIndex],
+                                        apiSurfaceTokenCount: tokens
+                                    };
+                                    if (this.panel) {
+                                        this.panel.state.selectedFiles = updatedFiles;
+                                    }
+                                }
+                            } catch (error) {
+                                console.error('Error calculating API surface tokens:', error);
+                                // Fallback to a simple estimation if all else fails
+                                tokens = Math.ceil(surfaceText.length / 4); // Rough estimate
+                            }
+                            
+                            console.log(`PromptPanelProvider: API surface token count for ${path}: ${tokens}`);
+                            
+                            // Also send the API surface content to update the FileContents component
+                            await this.sendApiSurfaceContentToWebview(path);
                         }
                     }
+                } else {
+                    // When toggling OFF, use the original file token count
+                    tokens = selectedFiles[fileIndex].tokenCount;
+                    console.log(`PromptPanelProvider: Original file token count for ${path}: ${tokens}`);
                 }
                 
                 // Generate a unique message ID
                 const messageId = `apiSurfaceUsageChanged:${path}:${Date.now()}`;
+                
+                // Ensure tokens is a number and not null
+                if (tokens === null) {
+                    // If we still don't have tokens, try to get it from the file
+                    if (selectedFiles[fileIndex].tokenCount !== null) {
+                        tokens = selectedFiles[fileIndex].tokenCount;
+                        console.log(`PromptPanelProvider: Using file token count as fallback: ${tokens}`);
+                    } else {
+                        // Last resort - read the file and count tokens
+                        try {
+                            tokens = await this.handleFileContent(path, this.selectedModel);
+                            console.log(`PromptPanelProvider: Calculated tokens from file content: ${tokens}`);
+                        } catch (error) {
+                            console.error('Error calculating tokens from file:', error);
+                            // Absolute last resort - use a placeholder value
+                            tokens = 100; // Just a placeholder to avoid null
+                            console.log(`PromptPanelProvider: Using placeholder token count: ${tokens}`);
+                        }
+                    }
+                }
+                
+                // Final sanity check - never send null tokens
+                if (tokens === null) {
+                    tokens = 100; // Absolute fallback
+                    console.log(`PromptPanelProvider: Using absolute fallback token count: ${tokens}`);
+                }
+                
+                console.log(`PromptPanelProvider: Sending apiSurfaceUsageChanged with tokens: ${tokens}`);
                 
                 // Notify the webview that the API surface usage has changed
                 this.panel?.webview.postMessage({
@@ -845,8 +939,24 @@ export class PromptPanelProvider {
                     type: 'apiSurfaceUsageChanged',
                     path: path,
                     useApiSurface: useApiSurface,
-                    tokens: apiSurfaceTokens
+                    tokens: tokens
                 });
+                
+                // If toggling OFF, also send the original file content
+                if (!useApiSurface) {
+                    await this.sendFileContentToWebview(path);
+                }
+                
+                // Also send an updated fileTokenCount message to ensure the FilePill gets updated
+                if (tokens !== null) {
+                    const tokenMessageId = `fileTokenCount:${path}:${Date.now()}`;
+                    this.panel?.webview.postMessage({
+                        id: tokenMessageId,
+                        type: 'fileTokenCount',
+                        path: path,
+                        tokenCount: tokens
+                    });
+                }
             }
         } catch (error) {
             console.error('Error handling API surface usage toggle:', error);
